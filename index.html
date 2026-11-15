@@ -896,10 +896,6 @@
         <button type="button" class="pill ghost" id="exportYearOfflineBtn">匯出全年離線包</button>
         <button type="button" class="pill ghost" id="closeSetupBtn">關閉</button>
       </div>
-      <div class="offline-pack-row" id="offlinePackRow">
-        <a class="pill ghost" id="downloadOfflinePackBtn" href="./生字泡泡-離線一冊生字.html" download="生字泡泡-離線一冊生字.html">另存離線單檔（選用）</a>
-        <p class="hint" id="offlinePackNote" style="margin:0;flex:1;min-width:min(220px,100%);">美洲一冊約 228 字筆順已內建在網頁，家裡直接開此站即可練習動畫，不必再下載。右側可選用另存單檔給無網路環境。</p>
-      </div>
       <p class="hint" id="offlineHint" hidden></p>
     </div>
   </div>
@@ -3755,22 +3751,15 @@
           box.textContent = ch;
           box.disabled = true;
         }
-        // 粉紅字：重新聽寫時若沒再按 📖 就寫對，且尚未練習過 → 直接依無底圖成功變綠
+        // 聽寫寫對：若在當前生字裡，藍→綠；再考對一次→打勾（無底圖成功累計）
         const seatId =
           vocabSession.seatId != null
             ? vocabSession.seatId
             : activeSeat() && activeSeat().id;
-        if (seatId != null && ch) {
-          const wasPink = vocabHintedListForSeat(seatId).indexOf(ch) >= 0;
-          const lookedThisRound =
-            vocabSession.hintedChars && vocabSession.hintedChars.has(ch);
-          const rec = charRecordFor(seatId, ch);
-          const notPracticedYet = !rec.freehand && !rec.outline;
-          if (wasPink && !lookedThisRound && notPracticedYet) {
-            const seat =
-              state.seats.find((s) => s.id === seatId) || { id: seatId };
-            markCharPractice(seat, ch, false);
-          }
+        if (seatId != null && ch && (state.chars || []).indexOf(ch) >= 0) {
+          const seat =
+            state.seats.find((s) => s.id === seatId) || { id: seatId };
+          markCharPractice(seat, ch, false);
         }
         const allDone = vocabSession.doneSlots.every(Boolean);
         if (!allDone) return;
@@ -4068,8 +4057,6 @@
         state.includeReview = true;
         state.showOutline = false;
         state.showMoe = true;
-        const packRow = document.getElementById("offlinePackRow");
-        if (packRow) packRow.hidden = true;
       } else {
         load(classesMeta.activeClassId);
         save();

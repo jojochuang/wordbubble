@@ -28,8 +28,6 @@ python3 server.py
 | `pack-data.js` | 內建筆順包（約 228 字） |
 | `server.py` | 本機 API（選用） |
 | `sw.js` | Service Worker |
-| `生字泡泡-離線一冊生字.html` | 可另存的完整單檔（選用） |
-
 ## 更新筆順包
 
 在有本機 `svg/` 的環境匯出離線包後，把裡面的 `charData` 再匯出成 `pack-data.js`（`window.__BUBBLE_PACK__`）。
