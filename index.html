@@ -897,8 +897,8 @@
         <button type="button" class="pill ghost" id="closeSetupBtn">關閉</button>
       </div>
       <div class="offline-pack-row" id="offlinePackRow">
-        <a class="pill primary" id="downloadOfflinePackBtn" href="./生字泡泡-離線一冊生字.html" download="生字泡泡-離線一冊生字.html">下載筆順離線包</a>
-        <p class="offline-pack-note" id="offlinePackNote">第一次使用必須先下載。下載後請到「檔案 → 最近項目」點開該 HTML（可能不在「下載項目」裡），用 Safari 開啟即可離線寫字；這不會自動套進網頁版。</p>
+        <a class="pill ghost" id="downloadOfflinePackBtn" href="./生字泡泡-離線一冊生字.html" download="生字泡泡-離線一冊生字.html">另存離線單檔（選用）</a>
+        <p class="hint" id="offlinePackNote" style="margin:0;flex:1;min-width:min(220px,100%);">美洲一冊約 228 字筆順已內建在網頁，家裡直接開此站即可練習動畫，不必再下載。右側可選用另存單檔給無網路環境。</p>
       </div>
       <p class="hint" id="offlineHint" hidden></p>
     </div>
@@ -1073,6 +1073,7 @@
   </div>
   <div class="confetti" id="confetti" hidden></div>
 
+  <script src="./pack-data.js"></script>
   <script>
     (function () {
       const STORAGE_KEY = "char_bubble_board_v2";
@@ -1088,8 +1089,14 @@
       const EXAM_GID = "1975515821";
       const SPEAK_LANG_KEY = "dictation_exam_speak_lang";
       const GIFT_EMOJIS = ["🎁", "🌟", "🦄", "🍭", "🎈", "🦊", "🌈", "🏆"];
+      // 完整離線單檔（舊流程）或 GitHub 內建 pack-data.js
       const OFFLINE_PACK = window.__BUBBLE_OFFLINE__ || null;
-      const charDataMemory = (OFFLINE_PACK && OFFLINE_PACK.charData) ? Object.assign({}, OFFLINE_PACK.charData) : {};
+      const BUBBLE_PACK = window.__BUBBLE_PACK__ || null;
+      const charDataMemory = Object.assign(
+        {},
+        (BUBBLE_PACK && BUBBLE_PACK.charData) || {},
+        (OFFLINE_PACK && OFFLINE_PACK.charData) || {}
+      );
 
       const els = {
         classSub: document.getElementById("classSub"),
@@ -2040,7 +2047,7 @@
         const wantMoe = !opts || opts.moe !== false;
         if (charDataMemory[ch] && Array.isArray(charDataMemory[ch].strokes)) {
           const cached = charDataMemory[ch];
-          if (wantMoe && !cached.medians && !OFFLINE_PACK) {
+          if (wantMoe && !cached.medians && !OFFLINE_PACK && !BUBBLE_PACK) {
             // 背景補教育部方向，不擋回傳
             enrichMediansInBackground(ch, cached);
           }
@@ -2049,7 +2056,7 @@
         const fromIdb = await idbGetChar(ch);
         if (fromIdb && Array.isArray(fromIdb.strokes) && fromIdb.strokes.length) {
           charDataMemory[ch] = fromIdb;
-          if (wantMoe && !fromIdb.medians && !OFFLINE_PACK) {
+          if (wantMoe && !fromIdb.medians && !OFFLINE_PACK && !BUBBLE_PACK) {
             enrichMediansInBackground(ch, fromIdb);
           }
           return fromIdb;
@@ -2061,7 +2068,7 @@
         const data = { strokes: strokes, medians: medians, source: source };
         charDataMemory[ch] = data;
         idbSetChar(ch, data);
-        if (wantMoe && !OFFLINE_PACK) enrichMediansInBackground(ch, data);
+        if (wantMoe && !OFFLINE_PACK && !BUBBLE_PACK) enrichMediansInBackground(ch, data);
         return data;
       }
 

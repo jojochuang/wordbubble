@@ -1,8 +1,9 @@
-/* 生字泡泡離線快取（本機 svg 筆順） */
-const CACHE = "char-bubble-v2-local-svg";
+/* 生字泡泡：快取主頁與內建筆順包 */
+const CACHE = "wordbubble-v3-pack";
 const PRECACHE = [
   "./index.html",
   "./sw.js",
+  "./pack-data.js",
   "./char_bubble.webmanifest",
 ];
 
@@ -26,11 +27,14 @@ self.addEventListener("fetch", (event) => {
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) return;
 
+  const path = url.pathname;
   const isLocal =
-    url.pathname.endsWith("/index.html") || url.pathname.endsWith("/") ||
-    url.pathname.endsWith("/sw.js") ||
-    url.pathname.endsWith("/char_bubble.webmanifest") ||
-    url.pathname.includes("/svg/");
+    path.endsWith("/index.html") ||
+    path.endsWith("/") ||
+    path.endsWith("/sw.js") ||
+    path.endsWith("/pack-data.js") ||
+    path.endsWith("/char_bubble.webmanifest") ||
+    path.includes("/svg/");
 
   if (!isLocal) return;
 
