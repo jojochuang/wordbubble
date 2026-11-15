@@ -1,9 +1,9 @@
+*.html.bak
+*.pyc
 .DS_Store
 .cache/
-__pycache__/
-*.pyc
 .env
 .env.*
-svg/
-*.html.bak
 .print_tmp/
+__pycache__/
+svg/

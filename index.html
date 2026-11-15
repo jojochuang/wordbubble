@@ -87,6 +87,11 @@
       flex-wrap: wrap;
       justify-content: flex-end;
     }
+    a.pill {
+      text-decoration: none;
+      display: inline-block;
+      box-sizing: border-box;
+    }
     .pill {
       border: none;
       border-radius: 999px;
@@ -874,6 +879,9 @@
         <button type="button" class="pill primary" id="saveSetupBtn">儲存並開始</button>
         <button type="button" class="pill ghost" id="exportYearOfflineBtn">匯出全年離線包</button>
         <button type="button" class="pill ghost" id="closeSetupBtn">關閉</button>
+      </div>
+      <div class="row-btns" style="margin-top:4px;">
+        <a class="pill primary" id="downloadOfflinePackBtn" href="./生字泡泡-離線一冊生字.html" download="生字泡泡-離線一冊生字.html">下載筆順離線包</a>
       </div>
       <p class="hint" id="offlineHint" hidden></p>
     </div>
@@ -3918,6 +3926,8 @@
         state.includeReview = true;
         state.showOutline = false;
         state.showMoe = true;
+        const dl = document.getElementById("downloadOfflinePackBtn");
+        if (dl) dl.hidden = true;
       } else {
         load(classesMeta.activeClassId);
         save();
