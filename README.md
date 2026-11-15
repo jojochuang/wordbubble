@@ -2,7 +2,7 @@
 
 依筆順寫對就消泡泡；支援語詞聽寫、多班級試算表（網址只存本機）。
 
-線上開啟時會直接讀 Google 試算表（必要時走 CORS 代理）；本機有 `server.py` 時優先用 `/api/sheet_csv`。
+線上開啟時用 Google Sheets gviz（JSONP）讀課次／考試表，不需本機伺服器；本機有 `server.py` 時仍優先走 `/api/sheet_csv`。
 
 ## 本機啟動
 
