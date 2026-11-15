@@ -1,0 +1,3945 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="生字泡泡" />
+  <meta name="theme-color" content="#2aa0e8" />
+  <title>wordbubble｜生字泡泡</title>
+  <link rel="manifest" href="char_bubble.webmanifest" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Noto+Sans+TC:wght@500;700;900&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg0: #dff3ff;
+      --bg1: #f7fbff;
+      --ink: #16324f;
+      --muted: #5d7a96;
+      --bubble: #3eb7ff;
+      --bubble-deep: #1f8fd6;
+      --pop: #9ad8a0;
+      --warn: #e07a4c;
+      --panel: rgba(255, 255, 255, 0.92);
+      --line: rgba(22, 50, 79, 0.12);
+      --shadow: 0 12px 30px rgba(31, 100, 160, 0.18);
+      --safe-b: env(safe-area-inset-bottom, 0px);
+      --safe-t: env(safe-area-inset-top, 0px);
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      min-height: 100%;
+      height: 100%;
+      font-family: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(ellipse 70% 50% at 15% 0%, #b8e7ff 0%, transparent 55%),
+        radial-gradient(ellipse 60% 45% at 90% 10%, #ffe7c8 0%, transparent 50%),
+        linear-gradient(180deg, var(--bg0), var(--bg1) 55%, #eef8ff);
+    }
+    body {
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .display {
+      font-family: "Fredoka", "Noto Sans TC", sans-serif;
+      letter-spacing: 0.02em;
+    }
+    .topbar {
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: calc(10px + var(--safe-t)) 14px 10px;
+      background: rgba(255,255,255,0.72);
+      backdrop-filter: blur(10px);
+      border-bottom: 1px solid var(--line);
+    }
+    .brand {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      min-width: 0;
+    }
+    .brand h1 {
+      margin: 0;
+      font-size: clamp(1.15rem, 2.4vw, 1.55rem);
+      font-weight: 700;
+      line-height: 1.1;
+    }
+    .brand .sub {
+      font-size: 0.82rem;
+      color: var(--muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .top-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-shrink: 0;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+    .pill {
+      border: none;
+      border-radius: 999px;
+      padding: 10px 14px;
+      font: inherit;
+      font-weight: 700;
+      cursor: pointer;
+      background: #fff;
+      color: var(--ink);
+      box-shadow: 0 2px 0 rgba(22,50,79,0.08);
+    }
+    .pill.primary {
+      background: linear-gradient(180deg, #57c3ff, #2aa0e8);
+      color: #fff;
+    }
+    .pill.ghost {
+      background: transparent;
+      border: 1.5px solid var(--line);
+      box-shadow: none;
+    }
+    .pill.warn {
+      background: #fff4ed;
+      color: var(--warn);
+    }
+    .seat-now {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: #16324f;
+      color: #fff;
+      font-weight: 700;
+      font-size: 0.95rem;
+    }
+    .seat-now.empty {
+      background: #fff;
+      color: var(--warn);
+      border: 2px dashed #f0b089;
+    }
+    main {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      padding: 12px 14px calc(14px + var(--safe-b));
+      gap: 12px;
+    }
+    .progress-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .meter {
+      flex: 1;
+      min-width: 160px;
+      height: 12px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.8);
+      border: 1px solid var(--line);
+      overflow: hidden;
+    }
+    .meter > span {
+      display: block;
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, #63d2ff, #49c27a);
+      transition: width 0.35s ease;
+    }
+    .meter-label {
+      font-weight: 700;
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+    .board {
+      flex: 1;
+      min-height: 0;
+      overflow: auto;
+      -webkit-overflow-scrolling: touch;
+      padding: 8px 4px 20px;
+    }
+    .bubbles {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+      gap: 14px;
+      max-width: 980px;
+      margin: 0 auto;
+    }
+    .bubble {
+      aspect-ratio: 1;
+      border: none;
+      border-radius: 50%;
+      cursor: pointer;
+      position: relative;
+      font-family: "Noto Sans TC", sans-serif;
+      font-size: clamp(2rem, 7vw, 3rem);
+      font-weight: 900;
+      color: #fff;
+      background:
+        radial-gradient(circle at 30% 28%, rgba(255,255,255,0.55), transparent 28%),
+        radial-gradient(circle at 50% 55%, var(--bubble), var(--bubble-deep));
+      box-shadow: var(--shadow), inset 0 -10px 18px rgba(0,60,110,0.18);
+      transition: transform 0.15s ease, filter 0.2s ease, opacity 0.2s ease;
+      touch-action: manipulation;
+    }
+    .bubble:active { transform: scale(0.96); }
+    /* 語詞聽寫曾看過筆順 → 粉（尚未練習時） */
+    .bubble.level-hint {
+      background:
+        radial-gradient(circle at 30% 28%, rgba(255,255,255,0.55), transparent 28%),
+        radial-gradient(circle at 50% 55%, #ff9ec4, #f06a9a);
+      color: rgba(255,255,255,0.95);
+      cursor: pointer;
+    }
+    /* 有底圖完成 → 淺藍 */
+    .bubble.level-outline {
+      background:
+        radial-gradient(circle at 30% 28%, rgba(255,255,255,0.55), transparent 28%),
+        radial-gradient(circle at 50% 55%, #9fd6f5, #6bb8e8);
+      color: rgba(255,255,255,0.95);
+      cursor: pointer;
+    }
+    /* 無底圖寫對一次 → 綠 */
+    .bubble.level-free {
+      background:
+        radial-gradient(circle at 30% 28%, rgba(255,255,255,0.4), transparent 28%),
+        radial-gradient(circle at 50% 55%, #b8e6be, #6fbf7a);
+      color: rgba(255,255,255,0.92);
+      cursor: pointer;
+    }
+    /* 無底圖寫對兩次 → 綠 + 勾 */
+    .bubble.level-free2 {
+      background:
+        radial-gradient(circle at 30% 28%, rgba(255,255,255,0.4), transparent 28%),
+        radial-gradient(circle at 50% 55%, #9adba8, #4eae5f);
+      color: rgba(255,255,255,0.95);
+      cursor: pointer;
+    }
+    .bubble.level-free2::after {
+      content: "✓";
+      position: absolute;
+      right: 14%;
+      bottom: 12%;
+      font-size: 0.9rem;
+      background: #fff;
+      color: #2f8a45;
+      width: 1.4em;
+      height: 1.4em;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      font-weight: 900;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.12);
+    }
+    .bubble.locked {
+      filter: grayscale(0.35) brightness(0.95);
+    }
+    /* 複習字與新字同色，僅標「複」 */
+    .bubble.review::before {
+      content: "複";
+      position: absolute;
+      left: 12%;
+      top: 10%;
+      font-size: 0.72rem;
+      font-weight: 800;
+      color: rgba(255,255,255,0.9);
+      background: rgba(22,50,79,0.35);
+      border-radius: 999px;
+      padding: 1px 6px;
+      line-height: 1.3;
+      z-index: 1;
+    }
+    .empty-hint {
+      max-width: 420px;
+      margin: 10vh auto 0;
+      text-align: center;
+      color: var(--muted);
+      line-height: 1.6;
+      font-size: 1.05rem;
+    }
+    .overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 40;
+      background: rgba(12, 32, 52, 0.45);
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+      padding: 12px;
+      padding-bottom: calc(12px + var(--safe-b));
+    }
+    .overlay.center { align-items: center; }
+    .overlay[hidden] { display: none !important; }
+    .sheet {
+      width: min(720px, 100%);
+      max-height: min(92vh, 920px);
+      overflow: auto;
+      background: var(--panel);
+      border-radius: 24px 24px 18px 18px;
+      box-shadow: var(--shadow);
+      padding: 18px 18px 16px;
+    }
+    .overlay.center .sheet {
+      border-radius: 24px;
+    }
+    .sheet h2 {
+      margin: 0 0 6px;
+      font-size: 1.25rem;
+    }
+    .sheet .hint {
+      margin: 0 0 14px;
+      color: var(--muted);
+      font-size: 0.92rem;
+      line-height: 1.5;
+    }
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      margin-bottom: 12px;
+    }
+    .field label {
+      font-size: 0.88rem;
+      font-weight: 700;
+      color: var(--muted);
+    }
+    .field input, .field textarea {
+      width: 100%;
+      border: 2px solid var(--line);
+      border-radius: 14px;
+      padding: 12px 14px;
+      font: inherit;
+      font-size: 1.05rem;
+      background: #fff;
+      color: var(--ink);
+    }
+    .field textarea { min-height: 88px; resize: vertical; }
+    .row-btns {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 8px;
+    }
+    .seat-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(88px, 1fr));
+      gap: 10px;
+    }
+    .seat-btn {
+      border: 2px solid var(--line);
+      border-radius: 16px;
+      background: #fff;
+      padding: 12px 8px;
+      font: inherit;
+      font-weight: 700;
+      cursor: pointer;
+      min-height: 64px;
+      touch-action: manipulation;
+    }
+    .seat-btn .no {
+      display: block;
+      font-size: 0.75rem;
+      color: var(--muted);
+      margin-bottom: 2px;
+    }
+    .seat-btn.active {
+      border-color: #2aa0e8;
+      background: #e8f7ff;
+      box-shadow: 0 0 0 3px rgba(42,160,232,0.2);
+    }
+    .seat-btn.done-all {
+      background: #edf9ef;
+      border-color: #6fbf7a;
+    }
+    .names-edit {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+    .names-edit .mini {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 6px 8px;
+    }
+    .names-edit .mini span {
+      font-size: 0.8rem;
+      color: var(--muted);
+      width: 2.2em;
+      flex-shrink: 0;
+    }
+    .names-edit .mini input {
+      border: none;
+      outline: none;
+      width: 100%;
+      font: inherit;
+      background: transparent;
+    }
+    .write-layout {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 12px;
+    }
+    @media (min-width: 860px) {
+      .write-layout.has-moe {
+        grid-template-columns: 1fr 1fr;
+        align-items: start;
+        justify-items: center;
+      }
+      .write-layout.has-moe .write-main,
+      .write-layout.has-moe .moe-box {
+        width: 100%;
+        max-width: min(420px, 100%);
+      }
+    }
+    .write-main {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      align-items: stretch;
+    }
+    #writeOverlay .sheet {
+      width: min(960px, 100%);
+    }
+    .hanzi-wrap {
+      display: flex;
+      justify-content: center;
+      touch-action: none;
+    }
+    #hanziTarget {
+      width: min(420px, 86vw);
+      height: min(420px, 86vw);
+      max-height: 52vh;
+      border: 3px solid #8ecff0;
+      border-radius: 20px;
+      background:
+        linear-gradient(#4a8eb8, #4a8eb8) center/2px 100% no-repeat,
+        linear-gradient(#4a8eb8, #4a8eb8) center/100% 2px no-repeat,
+        #fbfeff;
+      box-shadow: inset 0 0 0 1px rgba(42,160,232,0.15);
+      overflow: hidden;
+      position: relative;
+      touch-action: none;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    #hanziTarget svg.stroke-board {
+      width: 100%;
+      height: 100%;
+      display: block;
+      touch-action: none;
+    }
+    #hanziTarget .hint-stroke {
+      fill: rgba(224, 122, 76, 0.35);
+      animation: hintPulse 1.1s ease-in-out infinite;
+    }
+    @keyframes hintPulse {
+      0%, 100% { opacity: 0.35; }
+      50% { opacity: 0.7; }
+    }
+    .write-toggles {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px 14px;
+      justify-content: center;
+      font-size: 0.92rem;
+      font-weight: 700;
+      color: var(--muted);
+    }
+    .write-toggles label {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      cursor: pointer;
+    }
+    .write-msg {
+      min-height: 1.4em;
+      text-align: center;
+      font-weight: 700;
+      color: var(--muted);
+    }
+    .write-msg.ok { color: #2f8a45; }
+    .write-msg.bad { color: #c0392b; }
+    .moe-box {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      border-radius: 18px;
+      overflow: hidden;
+      background: #fff;
+      border: 1px solid var(--line);
+      width: 100%;
+      max-width: min(420px, 100%);
+      margin: 0 auto;
+      height: auto;
+      min-height: 0;
+    }
+    .moe-demo-host {
+      flex: 0 0 auto;
+      width: min(420px, 86vw);
+      height: min(420px, 86vw);
+      max-height: 52vh;
+      aspect-ratio: 1 / 1;
+      box-sizing: border-box;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background:
+        linear-gradient(#d7ebf7, #d7ebf7) center/1px 100% no-repeat,
+        linear-gradient(#d7ebf7, #d7ebf7) center/100% 1px no-repeat,
+        #f7fafc;
+      padding: 8px;
+      border-radius: 16px;
+      overflow: hidden;
+    }
+    .moe-demo-host svg {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+    .moe-demo-controls {
+      flex: 0 0 auto;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      justify-content: center;
+      padding: 8px 10px;
+      border-top: 1px solid var(--line);
+      background: #fff;
+    }
+    .moe-demo-controls .pill {
+      padding: 8px 12px;
+      font-size: 0.9rem;
+    }
+    .moe-demo-controls label {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.88rem;
+      font-weight: 700;
+      color: var(--muted);
+    }
+    .moe-demo-controls select {
+      font: inherit;
+      font-weight: 700;
+      padding: 4px 8px;
+      border-radius: 10px;
+      border: 1px solid var(--line);
+      background: #fff;
+    }
+    .moe-credit {
+      flex: 0 0 auto;
+      font-size: 0.7rem;
+      color: var(--muted);
+      padding: 4px 8px 6px;
+      line-height: 1.35;
+      border-top: 1px solid var(--line);
+      background: #fff;
+    }
+    .moe-credit a { color: #1f8fd6; }
+    .lesson-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+    .lesson-row select {
+      flex: 1;
+      min-width: 160px;
+      max-width: 100%;
+      font: inherit;
+      font-weight: 700;
+      padding: 10px 12px;
+      border-radius: 12px;
+      border: 1px solid var(--line);
+      background: #fff;
+    }
+    #lessonSelect {
+      font-family: "Noto Sans TC", sans-serif;
+      letter-spacing: 0.02em;
+    }
+    .class-switch-row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+      margin: 0 0 14px;
+    }
+    .class-switch-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      flex: 1;
+      min-width: 0;
+    }
+    .class-switch-btn {
+      border: 1.5px solid var(--line);
+      background: #fff;
+      border-radius: 999px;
+      padding: 8px 14px;
+      font: inherit;
+      font-weight: 700;
+      color: var(--muted);
+      cursor: pointer;
+    }
+    .class-switch-btn.active {
+      background: #16324f;
+      border-color: #16324f;
+      color: #fff;
+    }
+    #addClassBtn {
+      flex-shrink: 0;
+    }
+    #newClassLessonUrl,
+    #newClassExamUrl {
+      min-height: 72px;
+      font-size: 0.92rem;
+    }
+    .gift-overlay .sheet {
+      text-align: center;
+      padding: 28px 22px 22px;
+    }
+    .gift-emoji {
+      font-size: 4.5rem;
+      line-height: 1;
+      animation: bounce 0.9s ease infinite alternate;
+    }
+    @keyframes bounce {
+      from { transform: translateY(0) scale(1); }
+      to { transform: translateY(-8px) scale(1.05); }
+    }
+    .gift-title {
+      font-size: 1.6rem;
+      margin: 10px 0 6px;
+    }
+    .confetti {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 50;
+      overflow: hidden;
+    }
+    .confetti i {
+      position: absolute;
+      top: -12px;
+      width: 10px;
+      height: 14px;
+      border-radius: 2px;
+      animation: fall linear forwards;
+    }
+    @keyframes fall {
+      to { transform: translateY(110vh) rotate(540deg); opacity: 0.2; }
+    }
+    .quick-seats {
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      padding-bottom: 2px;
+      -webkit-overflow-scrolling: touch;
+    }
+    .quick-seats .seat-btn {
+      min-width: 76px;
+      min-height: 52px;
+      flex-shrink: 0;
+      padding: 8px 10px;
+    }
+    .vocab-setup .lesson-row { margin-bottom: 12px; }
+    .vocab-progress {
+      text-align: center;
+      font-weight: 800;
+      color: var(--muted);
+      margin-bottom: 8px;
+    }
+    .vocab-speak-row {
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+    }
+    .vocab-boxes {
+      display: flex;
+      justify-content: center;
+      gap: 14px;
+      flex-wrap: wrap;
+      margin: 8px 0 16px;
+    }
+    .vocab-box-wrap {
+      position: relative;
+      width: min(120px, 28vw);
+    }
+    .vocab-box {
+      width: 100%;
+      aspect-ratio: 1;
+      border: 3px solid #8ecff0;
+      border-radius: 18px;
+      background:
+        linear-gradient(#d7ebf7, #d7ebf7) center/2px 100% no-repeat,
+        linear-gradient(#d7ebf7, #d7ebf7) center/100% 2px no-repeat,
+        #fbfeff;
+      font-family: "Noto Sans TC", sans-serif;
+      font-size: clamp(2rem, 8vw, 3rem);
+      font-weight: 900;
+      color: #16324f;
+      cursor: pointer;
+      box-shadow: inset 0 0 0 1px rgba(42,160,232,0.12);
+    }
+    .vocab-box.done {
+      border-color: #6fbf7a;
+      background:
+        linear-gradient(#cfe9d4, #cfe9d4) center/2px 100% no-repeat,
+        linear-gradient(#cfe9d4, #cfe9d4) center/100% 2px no-repeat,
+        #eefaf0;
+      color: #2f8a45;
+    }
+    .vocab-box:disabled {
+      opacity: 0.55;
+      cursor: default;
+    }
+    .vocab-stroke-hint-btn {
+      position: absolute;
+      top: 4px;
+      right: 4px;
+      z-index: 2;
+      width: 34px;
+      height: 34px;
+      padding: 0;
+      border: 1.5px solid #c5d9ea;
+      border-radius: 10px;
+      background: rgba(255, 255, 255, 0.95);
+      font-size: 1.05rem;
+      line-height: 1;
+      cursor: pointer;
+      box-shadow: 0 2px 6px rgba(22, 50, 79, 0.12);
+    }
+    .vocab-stroke-hint-btn:hover,
+    .vocab-stroke-hint-btn:focus-visible {
+      border-color: #2aa0e8;
+      outline: none;
+    }
+    .vocab-stroke-sheet {
+      width: min(420px, 100%);
+    }
+    .vocab-stroke-host {
+      width: min(320px, 78vw);
+      height: min(320px, 78vw);
+      margin: 0 auto 12px;
+      border: 2px solid var(--line);
+      border-radius: 16px;
+      background: #fbfeff;
+      overflow: hidden;
+    }
+    .vocab-stroke-host .moe-loading {
+      padding: 24px 16px;
+      text-align: center;
+      font: 700 14px/1.5 "Noto Sans TC", sans-serif;
+      color: var(--muted);
+    }
+    .vocab-hint {
+      text-align: center;
+      color: var(--muted);
+      font-size: 0.92rem;
+      line-height: 1.5;
+      margin: 0 0 12px;
+    }
+    .vocab-summary-chars {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 10px;
+      margin: 12px 0 4px;
+      min-height: 2.5em;
+    }
+    .vocab-summary-chars .chip {
+      min-width: 2.4em;
+      padding: 8px 12px;
+      border-radius: 14px;
+      background: linear-gradient(160deg, #ff9ec4, #f06a9a);
+      color: #fff;
+      font-family: "Noto Sans TC", sans-serif;
+      font-size: 1.6rem;
+      font-weight: 900;
+      text-align: center;
+      box-shadow: 0 4px 12px rgba(240, 106, 154, 0.28);
+    }
+    .vocab-summary-empty {
+      text-align: center;
+      color: var(--muted);
+      font-weight: 700;
+      margin: 16px 0;
+    }
+    .voice-mode-controls {
+      display: inline-flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      align-items: center;
+      justify-content: center;
+    }
+    .voice-mode-btn {
+      border: 1.5px solid var(--line);
+      background: #fff;
+      border-radius: 999px;
+      padding: 8px 12px;
+      font: inherit;
+      font-weight: 700;
+      font-size: 0.88rem;
+      color: var(--muted);
+      cursor: pointer;
+    }
+    .voice-mode-btn.active {
+      background: #16324f;
+      border-color: #16324f;
+      color: #fff;
+    }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <h1 class="display">生字泡泡</h1>
+      <div class="sub" id="classSub">先設定課次與當週生字</div>
+    </div>
+    <div class="top-actions">
+      <button type="button" class="seat-now empty" id="seatNowBtn" title="選擇座號">請先選座號</button>
+      <button type="button" class="pill ghost" id="vocabExamBtn">語詞聽寫</button>
+      <button type="button" class="pill ghost" id="setupBtn">設定</button>
+    </div>
+  </header>
+
+  <main>
+    <div class="progress-row">
+      <div class="meter" aria-hidden="true"><span id="meterFill"></span></div>
+      <div class="meter-label" id="meterLabel">0 / 0</div>
+      <button type="button" class="pill primary" id="pickSeatBtn">選座號／姓名</button>
+    </div>
+    <div class="quick-seats" id="quickSeats" hidden></div>
+    <div class="board" id="board">
+      <div class="empty-hint" id="emptyHint">請按右上角「設定」，選擇課次與當週生字。</div>
+      <div class="bubbles" id="bubbles" hidden></div>
+    </div>
+  </main>
+
+  <!-- 設定 -->
+  <div class="overlay center" id="setupOverlay" hidden>
+    <div class="sheet" role="dialog" aria-labelledby="setupTitle">
+      <h2 class="display" id="setupTitle">設定</h2>
+      <div class="class-switch-row" id="classSwitchRow" aria-label="班級">
+        <div class="class-switch-list" id="classSwitchList"></div>
+        <button type="button" class="pill primary" id="addClassBtn">新增班級</button>
+      </div>
+      <div class="field">
+        <label for="seatCountInput">人數（座號 1 起）</label>
+        <input id="seatCountInput" type="number" min="1" max="50" value="1" />
+      </div>
+      <div class="field">
+        <label>座號姓名（可空白，空白就顯示「N號」）</label>
+        <div class="names-edit" id="namesEdit"></div>
+      </div>
+      <div class="field">
+        <label for="lessonSelect">課次</label>
+        <div class="lesson-row">
+          <select id="lessonSelect" aria-label="選擇課次">
+            <option value="">載入課次中…</option>
+          </select>
+          <button type="button" class="pill ghost" id="reloadLessonsBtn">重新載入</button>
+        </div>
+        <p class="hint" id="lessonHint" style="margin:8px 0 0;" hidden></p>
+      </div>
+      <div class="field">
+        <label for="charsInput">本課生字（可微調；連續輸入即可）</label>
+        <textarea id="charsInput" placeholder="例：四不力山土月"></textarea>
+      </div>
+      <div class="field">
+        <label for="reviewCharsInput">本課複習字（可微調）</label>
+        <textarea id="reviewCharsInput" placeholder="例：二三五上小口"></textarea>
+      </div>
+      <div class="row-btns">
+        <button type="button" class="pill primary" id="saveSetupBtn">儲存並開始</button>
+        <button type="button" class="pill ghost" id="exportYearOfflineBtn">匯出全年離線包</button>
+        <button type="button" class="pill ghost" id="closeSetupBtn">關閉</button>
+      </div>
+      <p class="hint" id="offlineHint" hidden></p>
+    </div>
+  </div>
+
+  <!-- 新增班級（試算表網址只存本機） -->
+  <div class="overlay center" id="addClassOverlay" hidden>
+    <div class="sheet" role="dialog" aria-labelledby="addClassTitle" style="width:min(560px,100%);">
+      <h2 class="display" id="addClassTitle">新增班級</h2>
+      <div class="field">
+        <label for="newClassNameInput">班級名稱</label>
+        <input id="newClassNameInput" type="text" placeholder="例：歐洲二冊／三年忠班" autocomplete="off" />
+      </div>
+      <div class="field">
+        <label for="newClassLessonUrl">生字列表試算表網址</label>
+        <textarea id="newClassLessonUrl" placeholder="https://docs.google.com/spreadsheets/d/…（請保留 gid=…）" spellcheck="false"></textarea>
+      </div>
+      <div class="field">
+        <label for="newClassExamUrl">考試語詞試算表網址（可選）</label>
+        <textarea id="newClassExamUrl" placeholder="可留空；若填寫請保留 gid=…" spellcheck="false"></textarea>
+      </div>
+      <div class="row-btns">
+        <button type="button" class="pill primary" id="newClassSaveBtn">建立班級</button>
+        <button type="button" class="pill ghost" id="newClassCancelBtn">取消</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 語詞聽寫練習／考試 -->
+  <div class="overlay center" id="vocabExamOverlay" hidden>
+    <div class="sheet" role="dialog" aria-labelledby="vocabExamTitle" style="width:min(640px,100%);">
+      <h2 class="display" id="vocabExamTitle">語詞聽寫</h2>
+      <div id="vocabSetupPanel" class="vocab-setup">
+        <p class="hint">與「聽寫語詞考試」同一試算表。生字表 I 欄「目錄」對應考試表 A 欄（如 2週）。一次一詞；幾字幾格，可先寫任一字。底圖／提示預設關閉。</p>
+        <div class="field">
+          <label for="vocabLessonSelect">目錄／週次（考試試算表）</label>
+          <div class="lesson-row">
+            <select id="vocabLessonSelect" aria-label="聽寫目錄"></select>
+            <button type="button" class="pill ghost" id="vocabReloadLessonsBtn">重新載入</button>
+          </div>
+          <p class="hint" id="vocabLessonHint" style="margin:8px 0 0;">選目錄後會載入該週考試語詞。</p>
+        </div>
+        <div class="field">
+          <label>語音</label>
+          <div class="voice-mode-controls" id="vocabVoiceModeSetup" title="發音語言">
+            <button type="button" class="voice-mode-btn active" data-mode="zh">中文</button>
+            <button type="button" class="voice-mode-btn" data-mode="yue">廣東話</button>
+            <button type="button" class="voice-mode-btn" data-mode="both">中文和廣東話</button>
+          </div>
+        </div>
+        <div class="row-btns">
+          <button type="button" class="pill primary" id="vocabStartBtn">開始聽寫</button>
+          <button type="button" class="pill ghost" id="vocabCloseSetupBtn">關閉</button>
+        </div>
+      </div>
+      <div id="vocabPlayPanel" hidden>
+        <div class="vocab-progress" id="vocabProgress">第 1 / 1 詞</div>
+        <div class="vocab-speak-row">
+          <button type="button" class="pill primary" id="vocabSpeakBtn">🔊 再聽一次</button>
+          <button type="button" class="pill ghost" id="vocabSkipBtn">跳過此詞</button>
+          <span class="voice-mode-controls" id="vocabVoiceModePlay" title="發音語言">
+            <button type="button" class="voice-mode-btn active" data-mode="zh">中文</button>
+            <button type="button" class="voice-mode-btn" data-mode="yue">廣東話</button>
+            <button type="button" class="voice-mode-btn" data-mode="both">中＋粵</button>
+          </span>
+        </div>
+        <p class="vocab-hint">點格子寫字；不會寫可按格子右上角 📖 看筆順。可先寫後面的字再回頭寫前面的。</p>
+        <div class="vocab-boxes" id="vocabBoxes"></div>
+        <div class="row-btns" style="justify-content:center;">
+          <button type="button" class="pill ghost" id="vocabExitBtn">結束聽寫</button>
+        </div>
+      </div>
+      <div id="vocabSummaryPanel" hidden>
+        <p class="hint" id="vocabSummaryHint">本輪聽寫曾用 📖 查看筆順的字如下；這些字的泡泡會先變成粉紅色，之後練習變色規則不變。</p>
+        <div class="vocab-summary-chars" id="vocabSummaryChars"></div>
+        <div class="row-btns" style="justify-content:center;margin-top:14px;">
+          <button type="button" class="pill primary" id="vocabSummaryDoneBtn">回到泡泡</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 語詞聽寫：單字筆順提示 -->
+  <div class="overlay center" id="vocabStrokeOverlay" hidden>
+    <div class="sheet vocab-stroke-sheet" role="dialog" aria-labelledby="vocabStrokeTitle">
+      <h2 class="display" id="vocabStrokeTitle">筆順提示</h2>
+      <p class="hint" id="vocabStrokeHint">不會寫時可看筆順；看完按關閉再回格子寫字。</p>
+      <div class="vocab-stroke-host" id="vocabStrokeHost" aria-label="筆順示範"></div>
+      <div class="moe-demo-controls" style="justify-content:center;">
+        <button type="button" class="pill primary" id="vocabStrokePlayBtn">播放</button>
+        <button type="button" class="pill ghost" id="vocabStrokeNextBtn">下一筆</button>
+        <button type="button" class="pill ghost" id="vocabStrokeReplayBtn">重播</button>
+        <label>速度
+          <select id="vocabStrokeSpeedSelect" aria-label="示範速度">
+            <option value="slow">慢</option>
+            <option value="medium">中</option>
+            <option value="fast" selected>快</option>
+          </select>
+        </label>
+      </div>
+      <div class="row-btns" style="justify-content:center;margin-top:14px;">
+        <button type="button" class="pill primary" id="vocabStrokeCloseBtn">關閉</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 選座號 -->
+  <div class="overlay" id="seatOverlay" hidden>
+    <div class="sheet" role="dialog" aria-labelledby="seatTitle">
+      <h2 class="display" id="seatTitle">你是幾號？</h2>
+      <p class="hint">先點自己的座號／姓名，再開始消泡泡。</p>
+      <div class="seat-grid" id="seatGrid"></div>
+      <div class="row-btns">
+        <button type="button" class="pill ghost" id="closeSeatBtn">關閉</button>
+        <button type="button" class="pill warn" id="clearSeatBtn">清除目前學生</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 寫字：逐筆筆順（錯筆清除，對了才下一筆） -->
+  <div class="overlay center" id="writeOverlay" hidden>
+    <div class="sheet" role="dialog" aria-labelledby="writeTitle">
+      <h2 class="display" id="writeTitle">依筆順寫出這個字</h2>
+      <p class="hint" id="writeHint">用 Pencil／手指一筆一筆寫。寫錯那一筆會消失，必須寫對才可寫下一筆。全部寫完才消泡泡。</p>
+      <div class="write-layout" id="writeLayout">
+        <div class="write-main">
+          <div class="hanzi-wrap"><div id="hanziTarget"></div></div>
+          <div class="write-toggles">
+            <label><input type="checkbox" id="outlineNowCheck" /> 顯示底圖</label>
+            <label><input type="checkbox" id="hintStrokeCheck" /> 提示下一筆</label>
+          </div>
+          <div class="write-msg" id="writeMsg"></div>
+          <div class="row-btns" style="justify-content:center;">
+            <button type="button" class="pill ghost" id="clearWriteBtn">重頭練習</button>
+            <button type="button" class="pill ghost" id="closeWriteBtn">返回</button>
+          </div>
+        </div>
+        <div class="moe-box" id="moeBox" hidden>
+          <div class="moe-demo-host" id="moeDemoHost" aria-label="筆順示範"></div>
+          <div class="moe-demo-controls">
+            <button type="button" class="pill primary" id="moePlayBtn">播放</button>
+            <button type="button" class="pill ghost" id="moeNextBtn">下一筆</button>
+            <button type="button" class="pill ghost" id="moeReplayBtn">重播</button>
+            <label>速度
+              <select id="moeSpeedSelect" aria-label="示範速度">
+                <option value="slow">慢</option>
+                <option value="medium">中</option>
+                <option value="fast" selected>快</option>
+              </select>
+            </label>
+          </div>
+          <div class="moe-credit">
+            本機筆順示範；書寫方向參考
+            <a href="https://stroke-order.learningweb.moe.edu.tw/" target="_blank" rel="noopener noreferrer">教育部筆順學習網</a>
+            Track 軌跡（非商業教學）。預設靜止，請按「播放」。
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 禮物 -->
+  <div class="overlay center gift-overlay" id="giftOverlay" hidden>
+    <div class="sheet">
+      <div class="gift-emoji" id="giftEmoji">🎁</div>
+      <h2 class="display gift-title" id="giftTitle">全部消完了！</h2>
+      <p class="hint" id="giftText">恭喜！可以跟老師領小禮物／抽扭蛋。</p>
+      <div class="row-btns" style="justify-content:center;">
+        <button type="button" class="pill primary" id="claimGiftBtn">太棒了</button>
+      </div>
+    </div>
+  </div>
+  <div class="confetti" id="confetti" hidden></div>
+
+  <script>
+    (function () {
+      const STORAGE_KEY = "char_bubble_board_v2";
+      const CLASSES_META_KEY = "char_bubble_classes_v1";
+      const DEFAULT_CLASS_ID = "america1";
+      const CHAR_DATA_DB = "char_bubble_svg_v3";
+      const SVG_VIEW = 540;
+      const MOE_COORD = 2048;
+      const LESSON_SHEET_ID = "1MxROi0vIZ2Dk1doq3jJWlP28_t2R7j7q8N4h1YCs8Qc";
+      const LESSON_GID = "1085808977";
+      // 與聽寫語詞考試同一試算表（A＝目錄，B～K＝題）
+      const EXAM_SHEET_ID = "1PWGAxP2QEcfb3Aj3m7S-SWVqrxpI3Y3ywhkXcaxv9Ko";
+      const EXAM_GID = "1975515821";
+      const SPEAK_LANG_KEY = "dictation_exam_speak_lang";
+      const GIFT_EMOJIS = ["🎁", "🌟", "🦄", "🍭", "🎈", "🦊", "🌈", "🏆"];
+      const OFFLINE_PACK = window.__BUBBLE_OFFLINE__ || null;
+      const charDataMemory = (OFFLINE_PACK && OFFLINE_PACK.charData) ? Object.assign({}, OFFLINE_PACK.charData) : {};
+
+      const els = {
+        classSub: document.getElementById("classSub"),
+        seatNowBtn: document.getElementById("seatNowBtn"),
+        vocabExamBtn: document.getElementById("vocabExamBtn"),
+        setupBtn: document.getElementById("setupBtn"),
+        pickSeatBtn: document.getElementById("pickSeatBtn"),
+        classSwitchList: document.getElementById("classSwitchList"),
+        addClassBtn: document.getElementById("addClassBtn"),
+        addClassOverlay: document.getElementById("addClassOverlay"),
+        newClassNameInput: document.getElementById("newClassNameInput"),
+        newClassLessonUrl: document.getElementById("newClassLessonUrl"),
+        newClassExamUrl: document.getElementById("newClassExamUrl"),
+        newClassSaveBtn: document.getElementById("newClassSaveBtn"),
+        newClassCancelBtn: document.getElementById("newClassCancelBtn"),
+        vocabExamOverlay: document.getElementById("vocabExamOverlay"),
+        vocabSetupPanel: document.getElementById("vocabSetupPanel"),
+        vocabPlayPanel: document.getElementById("vocabPlayPanel"),
+        vocabLessonSelect: document.getElementById("vocabLessonSelect"),
+        vocabReloadLessonsBtn: document.getElementById("vocabReloadLessonsBtn"),
+        vocabLessonHint: document.getElementById("vocabLessonHint"),
+        vocabVoiceModeSetup: document.getElementById("vocabVoiceModeSetup"),
+        vocabVoiceModePlay: document.getElementById("vocabVoiceModePlay"),
+        vocabStartBtn: document.getElementById("vocabStartBtn"),
+        vocabCloseSetupBtn: document.getElementById("vocabCloseSetupBtn"),
+        vocabProgress: document.getElementById("vocabProgress"),
+        vocabSpeakBtn: document.getElementById("vocabSpeakBtn"),
+        vocabSkipBtn: document.getElementById("vocabSkipBtn"),
+        vocabBoxes: document.getElementById("vocabBoxes"),
+        vocabExitBtn: document.getElementById("vocabExitBtn"),
+        vocabSummaryPanel: document.getElementById("vocabSummaryPanel"),
+        vocabSummaryHint: document.getElementById("vocabSummaryHint"),
+        vocabSummaryChars: document.getElementById("vocabSummaryChars"),
+        vocabSummaryDoneBtn: document.getElementById("vocabSummaryDoneBtn"),
+        vocabStrokeOverlay: document.getElementById("vocabStrokeOverlay"),
+        vocabStrokeHost: document.getElementById("vocabStrokeHost"),
+        vocabStrokeTitle: document.getElementById("vocabStrokeTitle"),
+        vocabStrokePlayBtn: document.getElementById("vocabStrokePlayBtn"),
+        vocabStrokeNextBtn: document.getElementById("vocabStrokeNextBtn"),
+        vocabStrokeReplayBtn: document.getElementById("vocabStrokeReplayBtn"),
+        vocabStrokeSpeedSelect: document.getElementById("vocabStrokeSpeedSelect"),
+        vocabStrokeCloseBtn: document.getElementById("vocabStrokeCloseBtn"),
+        meterFill: document.getElementById("meterFill"),
+        meterLabel: document.getElementById("meterLabel"),
+        emptyHint: document.getElementById("emptyHint"),
+        bubbles: document.getElementById("bubbles"),
+        quickSeats: document.getElementById("quickSeats"),
+        setupOverlay: document.getElementById("setupOverlay"),
+        seatOverlay: document.getElementById("seatOverlay"),
+        writeOverlay: document.getElementById("writeOverlay"),
+        giftOverlay: document.getElementById("giftOverlay"),
+        seatCountInput: document.getElementById("seatCountInput"),
+        namesEdit: document.getElementById("namesEdit"),
+        lessonSelect: document.getElementById("lessonSelect"),
+        reloadLessonsBtn: document.getElementById("reloadLessonsBtn"),
+        lessonHint: document.getElementById("lessonHint"),
+        charsInput: document.getElementById("charsInput"),
+        reviewCharsInput: document.getElementById("reviewCharsInput"),
+        saveSetupBtn: document.getElementById("saveSetupBtn"),
+        exportYearOfflineBtn: document.getElementById("exportYearOfflineBtn"),
+        closeSetupBtn: document.getElementById("closeSetupBtn"),
+        offlineHint: document.getElementById("offlineHint"),
+        seatGrid: document.getElementById("seatGrid"),
+        closeSeatBtn: document.getElementById("closeSeatBtn"),
+        clearSeatBtn: document.getElementById("clearSeatBtn"),
+        hanziTarget: document.getElementById("hanziTarget"),
+        writeMsg: document.getElementById("writeMsg"),
+        writeHint: document.getElementById("writeHint"),
+        writeLayout: document.getElementById("writeLayout"),
+        outlineNowCheck: document.getElementById("outlineNowCheck"),
+        hintStrokeCheck: document.getElementById("hintStrokeCheck"),
+        clearWriteBtn: document.getElementById("clearWriteBtn"),
+        closeWriteBtn: document.getElementById("closeWriteBtn"),
+        moeBox: document.getElementById("moeBox"),
+        moeDemoHost: document.getElementById("moeDemoHost"),
+        moePlayBtn: document.getElementById("moePlayBtn"),
+        moeNextBtn: document.getElementById("moeNextBtn"),
+        moeReplayBtn: document.getElementById("moeReplayBtn"),
+        moeSpeedSelect: document.getElementById("moeSpeedSelect"),
+        giftEmoji: document.getElementById("giftEmoji"),
+        giftTitle: document.getElementById("giftTitle"),
+        giftText: document.getElementById("giftText"),
+        claimGiftBtn: document.getElementById("claimGiftBtn"),
+        confetti: document.getElementById("confetti"),
+      };
+
+      let state = defaultState();
+      let classesMeta = defaultClassesMeta();
+      let writingChar = "";
+      let writeContext = { type: "bubble" };
+      let quiz = null;
+      let quizActive = false;
+      let moeDemo = null;
+      let practiceUsedOutline = false;
+      let measuringPath = null;
+      let lessonCatalog = [];
+      let examCatalog = [];
+      let vocabSession = null;
+      let vocabHintDemo = null;
+      let vocabHintChar = "";
+      let speakLangMode = "zh"; // zh | yue | both
+      try {
+        const saved = localStorage.getItem(SPEAK_LANG_KEY);
+        if (saved === "zh" || saved === "yue" || saved === "both") speakLangMode = saved;
+      } catch (_) {}
+
+      function defaultState() {
+        return {
+          className: "",
+          seats: [],
+          lessonId: "",
+          lessonName: "",
+          newChars: [],
+          reviewChars: [],
+          includeReview: true,
+          chars: [],
+          progress: {},
+          giftsClaimed: {},
+          activeSeatId: null,
+          showOutline: false,
+          showMoe: true,
+          // 每位學生各自的「聽寫曾看筆順」字：{ "1": ["山", …] }
+          vocabHintsBySeat: {},
+        };
+      }
+
+      function builtinAmericaClass() {
+        return {
+          id: DEFAULT_CLASS_ID,
+          name: "美洲一冊",
+          builtin: true,
+          lessonSheetId: LESSON_SHEET_ID,
+          lessonGid: LESSON_GID,
+          examSheetId: EXAM_SHEET_ID,
+          examGid: EXAM_GID,
+          lessonUrl: "",
+          examUrl: "",
+        };
+      }
+
+      function defaultClassesMeta() {
+        return {
+          activeClassId: DEFAULT_CLASS_ID,
+          classes: [builtinAmericaClass()],
+        };
+      }
+
+      function boardStorageKey(classId) {
+        const id = classId || DEFAULT_CLASS_ID;
+        return id === DEFAULT_CLASS_ID ? STORAGE_KEY : STORAGE_KEY + "__" + id;
+      }
+
+      function extractSheetIdFromUrl(url) {
+        const m = String(url || "").match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/i);
+        return m ? m[1] : "";
+      }
+
+      function extractGidFromUrl(url) {
+        const m = String(url || "").match(/[?&#]gid=(\d+)/i);
+        return m ? m[1] : "";
+      }
+
+      function activeClassMeta() {
+        const list = (classesMeta && classesMeta.classes) || [];
+        const id = classesMeta && classesMeta.activeClassId;
+        return list.find((c) => c.id === id) || list[0] || builtinAmericaClass();
+      }
+
+      function saveClassesMeta() {
+        try {
+          localStorage.setItem(CLASSES_META_KEY, JSON.stringify(classesMeta));
+        } catch (_) {}
+      }
+
+      function loadClassesMeta() {
+        try {
+          const raw = localStorage.getItem(CLASSES_META_KEY);
+          if (!raw) {
+            classesMeta = defaultClassesMeta();
+            saveClassesMeta();
+            return;
+          }
+          const data = JSON.parse(raw);
+          if (!data || typeof data !== "object") {
+            classesMeta = defaultClassesMeta();
+            return;
+          }
+          let list = Array.isArray(data.classes) ? data.classes.slice() : [];
+          if (!list.some((c) => c && c.id === DEFAULT_CLASS_ID)) {
+            list.unshift(builtinAmericaClass());
+          } else {
+            list = list.map((c) => {
+              if (!c || c.id !== DEFAULT_CLASS_ID) return c;
+              return Object.assign({}, builtinAmericaClass(), c, {
+                name: "美洲一冊",
+                builtin: true,
+                lessonSheetId: LESSON_SHEET_ID,
+                lessonGid: LESSON_GID,
+                examSheetId: EXAM_SHEET_ID,
+                examGid: EXAM_GID,
+              });
+            });
+          }
+          classesMeta = {
+            activeClassId: data.activeClassId || DEFAULT_CLASS_ID,
+            classes: list.filter((c) => c && c.id && c.name),
+          };
+          if (!classesMeta.classes.some((c) => c.id === classesMeta.activeClassId)) {
+            classesMeta.activeClassId = DEFAULT_CLASS_ID;
+          }
+        } catch (_) {
+          classesMeta = defaultClassesMeta();
+        }
+      }
+
+      function normalizeLoadedState(data) {
+        state = Object.assign(defaultState(), data || {});
+        state.includeReview = true;
+        state.showOutline = false;
+        state.showMoe = true;
+        state.uiDefaults20261114 = true;
+        if (!Array.isArray(state.seats)) state.seats = [];
+        if (!Array.isArray(state.newChars)) state.newChars = [];
+        if (!Array.isArray(state.reviewChars)) state.reviewChars = [];
+        if (!Array.isArray(state.chars)) state.chars = [];
+        if (!state.newChars.length && state.chars.length) state.newChars = state.chars.slice();
+        state.chars = buildActiveChars(state.newChars, state.reviewChars, true);
+        if (!state.progress || typeof state.progress !== "object") state.progress = {};
+        if (!state.giftsClaimed || typeof state.giftsClaimed !== "object") state.giftsClaimed = {};
+        if (!state.vocabHintsBySeat || typeof state.vocabHintsBySeat !== "object") {
+          state.vocabHintsBySeat = {};
+        }
+        if (data && Array.isArray(data.vocabHintedChars) && data.vocabHintedChars.length) {
+          const sid = state.activeSeatId != null ? String(state.activeSeatId) : null;
+          if (sid) mergeVocabHintedCharsForSeat(sid, data.vocabHintedChars);
+          delete state.vocabHintedChars;
+        }
+      }
+
+      function load(classId) {
+        const id = classId || (classesMeta && classesMeta.activeClassId) || DEFAULT_CLASS_ID;
+        try {
+          let raw = localStorage.getItem(boardStorageKey(id));
+          if (!raw && id === DEFAULT_CLASS_ID) {
+            raw = localStorage.getItem("char_bubble_board_v1");
+          }
+          if (!raw) {
+            state = defaultState();
+            return;
+          }
+          const data = JSON.parse(raw);
+          if (!data || typeof data !== "object") {
+            state = defaultState();
+            return;
+          }
+          normalizeLoadedState(data);
+        } catch (_) {
+          state = defaultState();
+        }
+      }
+
+      function vocabHintedListForSeat(seatId) {
+        if (seatId == null) return [];
+        const arr = state.vocabHintsBySeat && state.vocabHintsBySeat[String(seatId)];
+        return Array.isArray(arr) ? arr : [];
+      }
+
+      function mergeVocabHintedCharsForSeat(seatId, chars) {
+        if (seatId == null) return;
+        if (!state.vocabHintsBySeat || typeof state.vocabHintsBySeat !== "object") {
+          state.vocabHintsBySeat = {};
+        }
+        const k = String(seatId);
+        if (!Array.isArray(state.vocabHintsBySeat[k])) state.vocabHintsBySeat[k] = [];
+        const seen = new Set(state.vocabHintsBySeat[k]);
+        (chars || []).forEach((ch) => {
+          if (!ch || seen.has(ch)) return;
+          seen.add(ch);
+          state.vocabHintsBySeat[k].push(ch);
+        });
+      }
+
+      function mergeVocabHintedChars(chars) {
+        const seat = activeSeat();
+        if (!seat) return;
+        mergeVocabHintedCharsForSeat(seat.id, chars);
+      }
+
+      function buildActiveChars(newChars, reviewChars, includeReview) {
+        const out = [];
+        const seen = new Set();
+        (newChars || []).forEach((ch) => {
+          if (!seen.has(ch)) {
+            seen.add(ch);
+            out.push(ch);
+          }
+        });
+        if (includeReview) {
+          (reviewChars || []).forEach((ch) => {
+            if (!seen.has(ch)) {
+              seen.add(ch);
+              out.push(ch);
+            }
+          });
+        }
+        return out;
+      }
+
+      function parseCsv(text) {
+        const rows = [];
+        let row = [];
+        let cur = "";
+        let inQ = false;
+        const s = String(text || "");
+        for (let i = 0; i < s.length; i++) {
+          const c = s[i];
+          if (inQ) {
+            if (c === '"') {
+              if (s[i + 1] === '"') {
+                cur += '"';
+                i++;
+              } else inQ = false;
+            } else cur += c;
+          } else if (c === '"') inQ = true;
+          else if (c === ",") {
+            row.push(cur);
+            cur = "";
+          } else if (c === "\n" || c === "\r") {
+            if (c === "\r" && s[i + 1] === "\n") i++;
+            row.push(cur);
+            rows.push(row);
+            row = [];
+            cur = "";
+          } else cur += c;
+        }
+        if (cur.length || row.length) {
+          row.push(cur);
+          rows.push(row);
+        }
+        return rows;
+      }
+
+      async function fetchLessonCatalog() {
+        const cls = activeClassMeta();
+        const sheetId = (cls && cls.lessonSheetId) || LESSON_SHEET_ID;
+        const gid = (cls && cls.lessonGid) || LESSON_GID;
+        const url =
+          "/api/sheet_csv?sheet_id=" +
+          encodeURIComponent(sheetId) +
+          "&gid=" +
+          encodeURIComponent(gid);
+        const res = await fetch(url, { cache: "no-store" });
+        if (!res.ok) throw new Error("試算表載入失敗");
+        const csv = await res.text();
+        const rows = parseCsv(csv);
+        const out = [];
+        for (let i = 1; i < rows.length; i++) {
+          const r = rows[i] || [];
+          const name = String(r[0] || "").trim();
+          const neu = extractHan(r[1] || "");
+          const rev = extractHan(r[2] || "");
+          const catalogKey = String(r[8] || "").trim(); // I 欄＝目錄，對應考試表 A 欄
+          const vocab = parseVocabList(r[9] || "");
+          if (!name && !neu.length && !rev.length && !vocab.length && !catalogKey) continue;
+          out.push({
+            id: String(i),
+            name: name || "第 " + i + " 列",
+            newChars: neu,
+            reviewChars: rev,
+            catalogKey: catalogKey,
+            vocab: vocab,
+          });
+        }
+        return out;
+      }
+
+      async function fetchExamCatalog() {
+        const cls = activeClassMeta();
+        const sheetId = cls && cls.examSheetId;
+        if (!sheetId) return [];
+        const gid = (cls && cls.examGid) || "0";
+        const url =
+          "/api/sheet_csv?sheet_id=" +
+          encodeURIComponent(sheetId) +
+          "&gid=" +
+          encodeURIComponent(gid);
+        const res = await fetch(url, { cache: "no-store" });
+        if (!res.ok) throw new Error("考試試算表載入失敗");
+        const csv = await res.text();
+        const rows = parseCsv(csv);
+        const out = [];
+        const start = rows.length && String(rows[0][0] || "").trim() === "目錄" ? 1 : 0;
+        for (let i = start; i < rows.length; i++) {
+          const r = rows[i] || [];
+          const label = String(r[0] || "").trim();
+          if (!label || label === "目錄") continue;
+          const words = [];
+          for (let q = 1; q <= 10; q++) {
+            const cell = String(r[q] || "").trim();
+            if (!cell) continue;
+            const chars = extractHanOrdered(cell);
+            if (!chars.length) continue;
+            words.push({ raw: cell, chars: chars, speak: chars.join("") });
+          }
+          if (!words.length) continue;
+          out.push({ id: label, label: label, words: words });
+        }
+        return out;
+      }
+
+      async function ensureVocabCatalogs(force) {
+        const needLesson = force || !lessonCatalog.length;
+        const needExam = force || !examCatalog.length;
+        const tasks = [];
+        if (needLesson) tasks.push(fetchLessonCatalog().then((c) => { lessonCatalog = c; }));
+        if (needExam) tasks.push(fetchExamCatalog().then((c) => { examCatalog = c; }));
+        if (tasks.length) await Promise.all(tasks);
+      }
+
+      /** 課次選單用：當週練習字（生字＋複習，去重），格式同 wordpuzzle 單元選單 */
+      function lessonMenuChars(les) {
+        return buildActiveChars(les && les.newChars, les && les.reviewChars, true);
+      }
+
+      function fillLessonSelect(selectedId) {
+        if (!els.lessonSelect) return;
+        const sel = els.lessonSelect;
+        sel.innerHTML = "";
+        const blank = document.createElement("option");
+        blank.value = "";
+        blank.textContent = lessonCatalog.length ? "請選擇課次" : "尚無課次";
+        sel.appendChild(blank);
+        lessonCatalog.forEach((les) => {
+          const chars = lessonMenuChars(les);
+          const opt = document.createElement("option");
+          opt.value = les.id;
+          opt.textContent = chars.length
+            ? les.name + "（" + chars.join("") + " 共" + chars.length + "字）"
+            : les.name;
+          sel.appendChild(opt);
+        });
+        if (selectedId) sel.value = selectedId;
+      }
+
+      function applyLessonToForm(les) {
+        if (!les) return;
+        els.charsInput.value = (les.newChars || []).join("");
+        if (els.reviewCharsInput) els.reviewCharsInput.value = (les.reviewChars || []).join("");
+        const practice = lessonMenuChars(les);
+        if (els.lessonHint) {
+          els.lessonHint.textContent =
+            "已帶入「" +
+            les.name +
+            "」：當週練習 " +
+            practice.join("") +
+            "（共 " +
+            practice.length +
+            " 字）。可再微調後儲存。";
+        }
+      }
+
+      async function reloadLessons(selectCurrent) {
+        if (els.lessonHint) els.lessonHint.textContent = "正在載入課次試算表…";
+        try {
+          lessonCatalog = await fetchLessonCatalog();
+          const prefer = selectCurrent ? state.lessonId : els.lessonSelect && els.lessonSelect.value;
+          fillLessonSelect(prefer || "");
+          if (els.lessonHint) {
+            els.lessonHint.textContent =
+              "已載入 " + lessonCatalog.length + " 個課次（約 " +
+              countUniqueInCatalog() +
+              " 個不重複字）。選課次即可帶入生字／複習字。";
+          }
+        } catch (e) {
+          fillLessonSelect("");
+          if (els.lessonHint) {
+            els.lessonHint.textContent =
+              "課次載入失敗：" + (e && e.message ? e.message : e) + "。仍可手動輸入生字。";
+          }
+        }
+      }
+
+      function countUniqueInCatalog() {
+        const s = new Set();
+        lessonCatalog.forEach((les) => {
+          (les.newChars || []).forEach((c) => s.add(c));
+          (les.reviewChars || []).forEach((c) => s.add(c));
+        });
+        return s.size;
+      }
+
+      function save() {
+        try {
+          const id = (classesMeta && classesMeta.activeClassId) || DEFAULT_CLASS_ID;
+          localStorage.setItem(boardStorageKey(id), JSON.stringify(state));
+        } catch (_) {}
+      }
+
+      function renderClassSwitch() {
+        if (!els.classSwitchList) return;
+        els.classSwitchList.innerHTML = "";
+        const activeId = classesMeta.activeClassId;
+        (classesMeta.classes || []).forEach((cls) => {
+          const btn = document.createElement("button");
+          btn.type = "button";
+          btn.className = "class-switch-btn" + (cls.id === activeId ? " active" : "");
+          btn.textContent = cls.name;
+          btn.setAttribute("aria-pressed", cls.id === activeId ? "true" : "false");
+          btn.addEventListener("click", () => switchClass(cls.id));
+          els.classSwitchList.appendChild(btn);
+        });
+      }
+
+      async function switchClass(classId) {
+        if (!classId || classId === classesMeta.activeClassId) return;
+        save();
+        classesMeta.activeClassId = classId;
+        saveClassesMeta();
+        load(classId);
+        lessonCatalog = [];
+        examCatalog = [];
+        ensureSeatProgressKeys();
+        renderClassSwitch();
+        fillSetupForm();
+        renderAll();
+        if (!OFFLINE_PACK) {
+          try {
+            await reloadLessons(true);
+          } catch (_) {}
+        }
+      }
+
+      function openAddClassDialog() {
+        if (els.newClassNameInput) els.newClassNameInput.value = "";
+        if (els.newClassLessonUrl) els.newClassLessonUrl.value = "";
+        if (els.newClassExamUrl) els.newClassExamUrl.value = "";
+        if (els.addClassOverlay) els.addClassOverlay.hidden = false;
+        if (els.newClassNameInput) els.newClassNameInput.focus();
+      }
+
+      function closeAddClassDialog() {
+        if (els.addClassOverlay) els.addClassOverlay.hidden = true;
+      }
+
+      async function createClassFromForm() {
+        const name = ((els.newClassNameInput && els.newClassNameInput.value) || "").trim();
+        const lessonUrl = ((els.newClassLessonUrl && els.newClassLessonUrl.value) || "").trim();
+        const examUrl = ((els.newClassExamUrl && els.newClassExamUrl.value) || "").trim();
+        if (!name) {
+          alert("請輸入班級名稱。");
+          return;
+        }
+        const lessonSheetId = extractSheetIdFromUrl(lessonUrl);
+        if (!lessonSheetId) {
+          alert("請貼上有效的生字列表 Google 試算表網址（需含 /spreadsheets/d/…）。");
+          return;
+        }
+        const lessonGid = extractGidFromUrl(lessonUrl) || "0";
+        let examSheetId = "";
+        let examGid = "";
+        if (examUrl) {
+          examSheetId = extractSheetIdFromUrl(examUrl);
+          if (!examSheetId) {
+            alert("考試語詞試算表網址無法辨識，請檢查或留空。");
+            return;
+          }
+          examGid = extractGidFromUrl(examUrl) || "0";
+        }
+        const id =
+          "c_" +
+          Date.now().toString(36) +
+          "_" +
+          Math.random().toString(36).slice(2, 7);
+        const entry = {
+          id: id,
+          name: name,
+          builtin: false,
+          lessonSheetId: lessonSheetId,
+          lessonGid: lessonGid,
+          examSheetId: examSheetId,
+          examGid: examGid,
+          lessonUrl: lessonUrl,
+          examUrl: examUrl,
+        };
+        save();
+        classesMeta.classes.push(entry);
+        classesMeta.activeClassId = id;
+        saveClassesMeta();
+        state = defaultState();
+        save();
+        lessonCatalog = [];
+        examCatalog = [];
+        closeAddClassDialog();
+        renderClassSwitch();
+        fillSetupForm();
+        renderAll();
+        try {
+          await reloadLessons(true);
+        } catch (_) {}
+      }
+
+      function openCharDb() {
+        return new Promise((resolve, reject) => {
+          const req = indexedDB.open(CHAR_DATA_DB, 1);
+          req.onupgradeneeded = () => {
+            const db = req.result;
+            if (!db.objectStoreNames.contains("chars")) db.createObjectStore("chars");
+          };
+          req.onsuccess = () => resolve(req.result);
+          req.onerror = () => reject(req.error);
+        });
+      }
+
+      async function idbGetChar(ch) {
+        try {
+          const db = await openCharDb();
+          return await new Promise((resolve, reject) => {
+            const tx = db.transaction("chars", "readonly");
+            const req = tx.objectStore("chars").get(ch);
+            req.onsuccess = () => resolve(req.result || null);
+            req.onerror = () => reject(req.error);
+          });
+        } catch (_) {
+          return null;
+        }
+      }
+
+      async function idbSetChar(ch, data) {
+        try {
+          const db = await openCharDb();
+          await new Promise((resolve, reject) => {
+            const tx = db.transaction("chars", "readwrite");
+            tx.objectStore("chars").put(data, ch);
+            tx.oncomplete = () => resolve();
+            tx.onerror = () => reject(tx.error);
+          });
+        } catch (_) {}
+      }
+
+      function ensureMeasurer() {
+        if (measuringPath) return measuringPath;
+        const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+        svg.setAttribute("viewBox", "0 0 " + SVG_VIEW + " " + SVG_VIEW);
+        svg.setAttribute("width", String(SVG_VIEW));
+        svg.setAttribute("height", String(SVG_VIEW));
+        svg.style.cssText = "position:absolute;left:-9999px;top:0;visibility:hidden;pointer-events:none;";
+        measuringPath = document.createElementNS("http://www.w3.org/2000/svg", "path");
+        svg.appendChild(measuringPath);
+        document.body.appendChild(svg);
+        return measuringPath;
+      }
+
+      function normalizeD(d) {
+        return String(d || "").replace(/\s+/g, " ").trim();
+      }
+
+      function stripTrailingZ(d) {
+        return normalizeD(d).replace(/\s*z\s*$/i, "").trim();
+      }
+
+      function parsePathD(svgText) {
+        const doc = new DOMParser().parseFromString(svgText, "image/svg+xml");
+        const paths = doc.querySelectorAll("path");
+        const parts = [];
+        paths.forEach((p) => {
+          const d = (p.getAttribute("d") || "").trim();
+          if (d) parts.push(d);
+        });
+        return normalizeD(parts.join(" "));
+      }
+
+      function diffCumulative(ds) {
+        const out = [];
+        let prev = "";
+        for (let i = 0; i < ds.length; i++) {
+          const cur = normalizeD(ds[i]);
+          if (!prev) {
+            out.push(cur);
+          } else if (cur.startsWith(prev)) {
+            out.push(cur.slice(prev.length).trim());
+          } else {
+            const prevOpen = stripTrailingZ(prev);
+            if (prevOpen && cur.startsWith(prevOpen)) {
+              out.push(cur.slice(prevOpen.length).trim());
+            } else {
+              out.push(cur);
+            }
+          }
+          prev = cur;
+        }
+        return out.filter((d) => d && d.length > 4);
+      }
+
+      function pickLargestSubpathD(d) {
+        const t = normalizeD(d);
+        if (!t) return t;
+        const chunks = t
+          .split(/\s+(?=M\s)/i)
+          .map((c) => c.trim())
+          .filter((c) => c.length > 8);
+        if (chunks.length <= 1) return t;
+        const mp = ensureMeasurer();
+        let best = t;
+        let bestArea = -1;
+        chunks.forEach((c) => {
+          try {
+            mp.setAttribute("d", c);
+            const bb = mp.getBBox();
+            const a = bb.width * bb.height;
+            if (a > bestArea && bb.width > 0.5 && bb.height > 0.5) {
+              bestArea = a;
+              best = c;
+            }
+          } catch (_) {}
+        });
+        return bestArea > 0 ? best : t;
+      }
+
+      function svgUrl(ch, strokeNum) {
+        const hex = ch.codePointAt(0).toString(16).toLowerCase();
+        return (
+          "svg/" +
+          encodeURIComponent(ch) +
+          "/" +
+          hex +
+          "_" +
+          String(strokeNum).padStart(2, "0") +
+          ".svg"
+        );
+      }
+
+      async function getMaxStrokeNumber(ch) {
+        try {
+          const r = await fetch("/api/get_stroke_count?char=" + encodeURIComponent(ch), {
+            cache: "force-cache",
+          });
+          if (r.ok) {
+            const j = await r.json();
+            const n = parseInt(j && j.count, 10) || 0;
+            if (n > 0) return n;
+          }
+        } catch (_) {}
+        // 後備：並行探測前 8 筆，再往後延
+        const probe = async (n) => {
+          try {
+            const r = await fetch(svgUrl(ch, n), { method: "HEAD", cache: "force-cache" });
+            return r.ok;
+          } catch (_) {
+            return false;
+          }
+        };
+        let maxNum = 0;
+        for (let base = 1; base <= 30; base += 8) {
+          const checks = [];
+          for (let n = base; n < base + 8 && n <= 30; n++) checks.push(probe(n).then((ok) => (ok ? n : 0)));
+          const nums = await Promise.all(checks);
+          const hit = nums.filter(Boolean);
+          if (!hit.length) break;
+          maxNum = Math.max(maxNum, ...hit);
+          if (!nums[nums.length - 1]) break;
+        }
+        return maxNum > 0 ? maxNum : null;
+      }
+
+      function normalizeMedians(raw, strokeCount, coordMax) {
+        if (!Array.isArray(raw) || raw.length !== strokeCount) return null;
+        const scale = coordMax ? SVG_VIEW / Number(coordMax) : 1;
+        const out = [];
+        for (let i = 0; i < raw.length; i++) {
+          const pts = raw[i];
+          if (!Array.isArray(pts) || pts.length < 2) return null;
+          const line = [];
+          for (let j = 0; j < pts.length; j++) {
+            const p = pts[j];
+            if (!Array.isArray(p) || p.length < 2) return null;
+            line.push({ x: Number(p[0]) * scale, y: Number(p[1]) * scale });
+          }
+          out.push(line);
+        }
+        return out;
+      }
+
+      async function loadMoeTrackMedians(ch, strokeCount) {
+        if (OFFLINE_PACK) return null;
+        try {
+          const r = await fetch("/api/moe_stroke?ch=" + encodeURIComponent(ch), {
+            cache: "force-cache",
+          });
+          if (!r.ok) return null;
+          const j = await r.json();
+          return normalizeMedians(j.medians, strokeCount, j.coordMax || MOE_COORD);
+        } catch (_) {
+          return null;
+        }
+      }
+
+      async function loadMediansJson(ch, strokeCount) {
+        try {
+          const r = await fetch(
+            "svg/" + encodeURIComponent(ch) + "/medians.json",
+            { cache: "force-cache" }
+          );
+          if (!r.ok) return null;
+          const j = await r.json();
+          if (!j || !Array.isArray(j.medians)) return null;
+          return normalizeMedians(j.medians, strokeCount, j.viewBox ? j.viewBox[2] : SVG_VIEW);
+        } catch (_) {
+          return null;
+        }
+      }
+
+      async function loadLocalStrokes(ch) {
+        const maxNum = await getMaxStrokeNumber(ch);
+        if (!maxNum) throw new Error("找不到「" + ch + "」的本機 svg 筆順");
+        const texts = await Promise.all(
+          Array.from({ length: maxNum }, (_, i) =>
+            fetch(svgUrl(ch, i + 1), { cache: "force-cache" }).then((r) => {
+              if (!r.ok) throw new Error("讀取「" + ch + "」第 " + (i + 1) + " 筆失敗");
+              return r.text();
+            })
+          )
+        );
+        const cum = texts.map(parsePathD).filter(Boolean);
+        const strokes = diffCumulative(cum).map(pickLargestSubpathD);
+        if (!strokes.length) throw new Error("「" + ch + "」筆順解析失敗");
+        return strokes;
+      }
+
+      async function loadCharData(ch, opts) {
+        const wantMoe = !opts || opts.moe !== false;
+        if (charDataMemory[ch] && Array.isArray(charDataMemory[ch].strokes)) {
+          const cached = charDataMemory[ch];
+          if (wantMoe && !cached.medians && !OFFLINE_PACK) {
+            // 背景補教育部方向，不擋回傳
+            enrichMediansInBackground(ch, cached);
+          }
+          return cached;
+        }
+        const fromIdb = await idbGetChar(ch);
+        if (fromIdb && Array.isArray(fromIdb.strokes) && fromIdb.strokes.length) {
+          charDataMemory[ch] = fromIdb;
+          if (wantMoe && !fromIdb.medians && !OFFLINE_PACK) {
+            enrichMediansInBackground(ch, fromIdb);
+          }
+          return fromIdb;
+        }
+        const strokes = await loadLocalStrokes(ch);
+        // 先回本機字形，立刻可練習；教育部 Track 背景補上
+        let medians = await loadMediansJson(ch, strokes.length);
+        let source = medians ? "local-svg+jpg-median" : "local-svg";
+        const data = { strokes: strokes, medians: medians, source: source };
+        charDataMemory[ch] = data;
+        idbSetChar(ch, data);
+        if (wantMoe && !OFFLINE_PACK) enrichMediansInBackground(ch, data);
+        return data;
+      }
+
+      function enrichMediansInBackground(ch, data) {
+        if (!data || data._moeFetching) return;
+        data._moeFetching = true;
+        loadMoeTrackMedians(ch, data.strokes.length)
+          .then((medians) => {
+            data._moeFetching = false;
+            if (!medians) return;
+            data.medians = medians;
+            data.source = "local-svg+moe-track";
+            charDataMemory[ch] = data;
+            idbSetChar(ch, data);
+            if (writingChar === ch && quiz && typeof quiz.setMedians === "function") {
+              quiz.setMedians(medians);
+              if (els.writeMsg && quizActive) {
+                els.writeMsg.textContent = "已套用教育部筆順方向。請依筆順一筆一筆寫。";
+                els.writeMsg.className = "write-msg ok";
+              }
+            }
+            if (writingChar === ch && moeDemo && typeof moeDemo.setMedians === "function") {
+              moeDemo.setMedians(medians);
+            }
+          })
+          .catch(() => {
+            data._moeFetching = false;
+          });
+      }
+
+      async function prefetchWeekChars(chars, statusEl) {
+        const list = chars || [];
+        let ok = 0;
+        const fail = [];
+        const concurrency = 3;
+        let i = 0;
+        async function worker() {
+          while (i < list.length) {
+            const idx = i++;
+            const ch = list[idx];
+            if (statusEl) {
+              statusEl.textContent =
+                "快取筆順 " + (idx + 1) + "/" + list.length + "：「" + ch + "」…";
+            }
+            try {
+              await loadCharData(ch, { moe: true });
+              ok++;
+            } catch (_) {
+              fail.push(ch);
+            }
+          }
+        }
+        await Promise.all(Array.from({ length: Math.min(concurrency, list.length || 1) }, () => worker()));
+        return { ok, fail };
+      }
+
+      function allYearChars() {
+        const s = new Set();
+        lessonCatalog.forEach((les) => {
+          (les.newChars || []).forEach((c) => s.add(c));
+          (les.reviewChars || []).forEach((c) => s.add(c));
+        });
+        return Array.from(s);
+      }
+
+      async function exportOfflinePack(opts) {
+        const year = !!(opts && opts.year);
+        let chars = year ? allYearChars() : (state.chars || []).slice();
+        if (year && !chars.length) {
+          if (!lessonCatalog.length) {
+            try {
+              lessonCatalog = await fetchLessonCatalog();
+            } catch (_) {}
+          }
+          chars = allYearChars();
+        }
+        if (!chars.length) {
+          alert(year ? "尚無課次字可打包，請先載入課次試算表。" : "請先儲存當週生字，再匯出離線包。");
+          return;
+        }
+        if (year && !confirm("將打包全年約 " + chars.length + " 字（含生字／複習字）。\n檔案較大，可能需數分鐘，確定繼續？")) {
+          return;
+        }
+        const btn = els.exportYearOfflineBtn;
+        const old = btn ? btn.textContent : "";
+        if (btn) {
+          btn.disabled = true;
+          btn.textContent = "打包中…";
+        }
+        try {
+          const pre = await prefetchWeekChars(chars, els.offlineHint);
+          if (pre.fail.length) {
+            throw new Error("這些字沒有本機 svg：「" + pre.fail.join("、") + "」");
+          }
+          const pageHtml = await fetch(location.pathname.split("/").pop() || "index.html").then((r) => {
+            if (!r.ok) throw new Error("讀取頁面失敗");
+            return r.text();
+          });
+          const packState = Object.assign({}, state, {
+            chars: chars.slice(),
+            newChars: year ? chars.slice() : (state.newChars || state.chars || []).slice(),
+            reviewChars: year ? [] : (state.reviewChars || []).slice(),
+            includeReview: year ? false : state.includeReview !== false,
+            lessonName: year ? "全年離線包" : state.lessonName,
+            lessonId: year ? "year-pack" : state.lessonId,
+            activeSeatId: null,
+            progress: {},
+            giftsClaimed: {},
+          });
+          const pack = { state: packState, charData: {} };
+          chars.forEach((ch) => {
+            pack.charData[ch] = charDataMemory[ch];
+          });
+          // 不可在本頁原始碼寫出字面 end-script 標籤，否則 HTML 會提早結束 script
+          const endScript = "</scr" + "ipt>";
+          const startScript = "<scr" + "ipt>";
+          const inject =
+            startScript +
+            "window.__BUBBLE_OFFLINE__=" +
+            JSON.stringify(pack).replace(/</g, "\\u003c") +
+            ";" +
+            endScript;
+          let out = pageHtml;
+          const bodyOpen = out.search(/<body[^>]*>/i);
+          if (bodyOpen < 0) throw new Error("頁面格式異常");
+          const insertAt = out.indexOf(">", bodyOpen) + 1;
+          out =
+            out.slice(0, insertAt) +
+            "\n" +
+            inject +
+            "\n" +
+            out.slice(insertAt);
+          out = out
+            .replace(/<link rel="manifest"[^>]*>\s*/i, "")
+            .replace(/<link rel="preconnect"[^>]*>\s*/gi, "")
+            .replace(/<link href="https:\/\/fonts\.googleapis\.com\/[^"]+"[^>]*>\s*/i, "");
+          if (out.indexOf("window.__BUBBLE_OFFLINE__") < 0) {
+            throw new Error("無法嵌入離線資料，請重新整理後再試");
+          }
+          const blob = new Blob([out], { type: "text/html;charset=utf-8" });
+          const a = document.createElement("a");
+          const name =
+            "生字泡泡-離線-" +
+            (year
+              ? "全年"
+              : (state.lessonName || "本週").replace(/[\\/:*?"<>|]/g, "")) +
+            "-" +
+            chars.length +
+            "字.html";
+          a.href = URL.createObjectURL(blob);
+          a.download = name;
+          document.body.appendChild(a);
+          a.click();
+          setTimeout(() => {
+            URL.revokeObjectURL(a.href);
+            a.remove();
+          }, 1500);
+        } catch (e) {
+          alert("匯出失敗：" + (e && e.message ? e.message : e));
+        } finally {
+          if (btn) {
+            btn.disabled = false;
+            btn.textContent = old || "匯出全年離線包";
+          }
+        }
+      }
+
+      function dist2(a, b) {
+        const dx = a.x - b.x;
+        const dy = a.y - b.y;
+        return dx * dx + dy * dy;
+      }
+
+      function polylineLength(pts) {
+        let t = 0;
+        for (let i = 1; i < pts.length; i++) t += Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y);
+        return t;
+      }
+
+      function thinPoints(pts, minDist) {
+        if (!pts || pts.length < 2) return pts || [];
+        const out = [{ x: pts[0].x, y: pts[0].y }];
+        const md = minDist * minDist;
+        for (let i = 1; i < pts.length; i++) {
+          if (dist2(out[out.length - 1], pts[i]) >= md) out.push({ x: pts[i].x, y: pts[i].y });
+        }
+        const end = pts[pts.length - 1];
+        if (dist2(out[out.length - 1], end) > 0.01) out.push({ x: end.x, y: end.y });
+        return out;
+      }
+
+      function approxMedian(d, n) {
+        const mp = ensureMeasurer();
+        mp.setAttribute("d", d);
+        let len = 0;
+        try {
+          len = mp.getTotalLength();
+        } catch (_) {
+          return [];
+        }
+        if (len < 8) return [];
+        const half = len / 2;
+        const count = Math.max(8, n || 28);
+        const pts = [];
+        for (let i = 0; i < count; i++) {
+          const t = (i / (count - 1)) * half;
+          const a = mp.getPointAtLength(t);
+          const b = mp.getPointAtLength(Math.min(len, t + half));
+          pts.push({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });
+        }
+        const start = mp.getPointAtLength(0);
+        if (dist2(pts[0], start) > dist2(pts[pts.length - 1], start)) pts.reverse();
+        return thinPoints(pts, 2);
+      }
+
+      function nearestDist(pt, median) {
+        let best = Infinity;
+        for (let i = 0; i < median.length - 1; i++) {
+          const ax = median[i].x;
+          const ay = median[i].y;
+          const bx = median[i + 1].x;
+          const by = median[i + 1].y;
+          const dx = bx - ax;
+          const dy = by - ay;
+          const seg2 = dx * dx + dy * dy;
+          let t = 0;
+          if (seg2 > 1e-6) t = Math.max(0, Math.min(1, ((pt.x - ax) * dx + (pt.y - ay) * dy) / seg2));
+          const qx = ax + t * dx;
+          const qy = ay + t * dy;
+          const d = Math.hypot(pt.x - qx, pt.y - qy);
+          if (d < best) best = d;
+        }
+        return best;
+      }
+
+      function matchStroke(userPts, median) {
+        // 幼兒友善：誤差容忍再加大 10%（位置／長度／角度）
+        const pts = thinPoints(userPts, 2);
+        if (pts.length < 2 || !median || median.length < 2) return false;
+        const userLen = polylineLength(pts);
+        const medLen = polylineLength(median);
+        if (userLen < 14) return false;
+        if (userLen < medLen * 0.227 || userLen > medLen * 3.39) return false;
+        let avg = 0;
+        for (let i = 0; i < pts.length; i++) avg += nearestDist(pts[i], median);
+        avg /= pts.length;
+        if (avg > 51) return false;
+        const startOk = Math.hypot(pts[0].x - median[0].x, pts[0].y - median[0].y) < 85;
+        const endOk =
+          Math.hypot(pts[pts.length - 1].x - median[median.length - 1].x, pts[pts.length - 1].y - median[median.length - 1].y) < 97;
+        if (!startOk || !endOk) return false;
+        const u = { x: pts[pts.length - 1].x - pts[0].x, y: pts[pts.length - 1].y - pts[0].y };
+        const m = {
+          x: median[median.length - 1].x - median[0].x,
+          y: median[median.length - 1].y - median[0].y,
+        };
+        const ul = Math.hypot(u.x, u.y) || 1;
+        const ml = Math.hypot(m.x, m.y) || 1;
+        const dot = (u.x / ul) * (m.x / ml) + (u.y / ul) * (m.y / ml);
+        return dot > 0.124;
+      }
+
+      function destroyMoeDemo() {
+        if (moeDemo) {
+          try {
+            moeDemo.destroy();
+          } catch (_) {}
+        }
+        moeDemo = null;
+        if (els.moeDemoHost) els.moeDemoHost.innerHTML = "";
+        if (els.moePlayBtn) els.moePlayBtn.textContent = "播放";
+      }
+
+      function moeDemoTiming(speedSelect) {
+        const sel = speedSelect || els.moeSpeedSelect;
+        const key = (sel && sel.value) || "fast";
+        if (key === "slow") return { strokeMs: 1400, gapMs: 380, minMs: 850 };
+        if (key === "medium") return { strokeMs: 850, gapMs: 240, minMs: 480 };
+        return { strokeMs: 450, gapMs: 140, minMs: 260 };
+      }
+
+      function createLocalStrokeDemo(host, strokes, mediansIn, opts) {
+        const ns = "http://www.w3.org/2000/svg";
+        let medians = mediansIn;
+        const playBtn = (opts && opts.playBtn) || els.moePlayBtn;
+        const speedSelect = (opts && opts.speedSelect) || els.moeSpeedSelect;
+        host.innerHTML = "";
+        const svg = document.createElementNS(ns, "svg");
+        svg.setAttribute("viewBox", "0 0 " + SVG_VIEW + " " + SVG_VIEW);
+        svg.setAttribute("width", "100%");
+        svg.setAttribute("height", "100%");
+
+        const defs = document.createElementNS(ns, "defs");
+        const outlineG = document.createElementNS(ns, "g");
+        outlineG.setAttribute("fill", "#c5d9ea");
+        strokes.forEach((d) => {
+          const p = document.createElementNS(ns, "path");
+          p.setAttribute("d", d);
+          outlineG.appendChild(p);
+        });
+
+        const doneG = document.createElementNS(ns, "g");
+        doneG.setAttribute("fill", "#16324f");
+        const liveG = document.createElementNS(ns, "g");
+        liveG.setAttribute("fill", "#16324f");
+
+        svg.appendChild(defs);
+        svg.appendChild(outlineG);
+        svg.appendChild(doneG);
+        svg.appendChild(liveG);
+        host.appendChild(svg);
+
+        // 預設靜止：完整字
+        strokes.forEach((d) => {
+          const p = document.createElementNS(ns, "path");
+          p.setAttribute("d", d);
+          doneG.appendChild(p);
+        });
+
+        let strokeIndex = 0;
+        let playing = false;
+        let paused = false;
+        let raf = 0;
+        let timer = null;
+        let destroyed = false;
+        let clipSeq = 0;
+
+        function clearTimers() {
+          if (raf) {
+            cancelAnimationFrame(raf);
+            raf = 0;
+          }
+          if (timer) {
+            clearTimeout(timer);
+            timer = null;
+          }
+        }
+
+        function ptsToD(pts) {
+          if (!pts.length) return "";
+          let d = "M " + pts[0].x + " " + pts[0].y;
+          for (let i = 1; i < pts.length; i++) d += " L " + pts[i].x + " " + pts[i].y;
+          return d;
+        }
+
+        function pathLen(pts) {
+          let len = 0;
+          for (let i = 1; i < pts.length; i++) {
+            len += Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y);
+          }
+          return len || 1;
+        }
+
+        function syncPlayBtn() {
+          if (!playBtn) return;
+          playBtn.textContent = playing && !paused ? "暫停" : "播放";
+        }
+
+        function timingNow() {
+          return moeDemoTiming(speedSelect);
+        }
+
+        function resetToStart(clearDone) {
+          clearTimers();
+          playing = false;
+          paused = false;
+          strokeIndex = 0;
+          liveG.innerHTML = "";
+          defs.innerHTML = "";
+          if (clearDone) doneG.innerHTML = "";
+          syncPlayBtn();
+        }
+
+        function appendDone(i) {
+          const p = document.createElementNS(ns, "path");
+          p.setAttribute("d", strokes[i]);
+          doneG.appendChild(p);
+        }
+
+        // 毛筆效果：寬筆觸沿 Track 前進，再用該筆外形當 mask 裁切
+        // （避免 clipPath+dashoffset 在舊瀏覽器不更新、看起來像細軌跡再一次填滿）
+        function animateStroke(i, then) {
+          if (destroyed || paused) return;
+          const median = medians[i];
+          if (!median || median.length < 2) {
+            appendDone(i);
+            then && then();
+            return;
+          }
+
+          liveG.innerHTML = "";
+          const maskId = "moeMask" + ++clipSeq;
+          const mask = document.createElementNS(ns, "mask");
+          mask.setAttribute("id", maskId);
+          mask.setAttribute("maskUnits", "userSpaceOnUse");
+
+          const maskBg = document.createElementNS(ns, "rect");
+          maskBg.setAttribute("x", "0");
+          maskBg.setAttribute("y", "0");
+          maskBg.setAttribute("width", String(SVG_VIEW));
+          maskBg.setAttribute("height", String(SVG_VIEW));
+          maskBg.setAttribute("fill", "#000");
+          mask.appendChild(maskBg);
+
+          const maskShape = document.createElementNS(ns, "path");
+          maskShape.setAttribute("d", strokes[i]);
+          maskShape.setAttribute("fill", "#fff");
+          mask.appendChild(maskShape);
+          defs.appendChild(mask);
+
+          const brush = document.createElementNS(ns, "path");
+          brush.setAttribute("d", ptsToD(median));
+          brush.setAttribute("fill", "none");
+          brush.setAttribute("stroke", "#16324f");
+          brush.setAttribute("stroke-width", "110");
+          brush.setAttribute("stroke-linecap", "round");
+          brush.setAttribute("stroke-linejoin", "round");
+          brush.setAttribute("mask", "url(#" + maskId + ")");
+          liveG.appendChild(brush);
+
+          let len = pathLen(median);
+          try {
+            if (brush.getTotalLength) len = Math.max(len, brush.getTotalLength() || 0);
+          } catch (_) {}
+          brush.style.strokeDasharray = String(len);
+          brush.style.strokeDashoffset = String(len);
+
+          const timing = timingNow();
+          const duration = Math.max(
+            timing.minMs,
+            timing.strokeMs * Math.max(0.55, Math.min(1.8, len / 220))
+          );
+          const start = performance.now();
+
+          const tick = (now) => {
+            if (destroyed || paused) return;
+            const t = Math.min(1, (now - start) / duration);
+            brush.style.strokeDashoffset = String(len * (1 - t));
+            if (t < 1) {
+              raf = requestAnimationFrame(tick);
+              return;
+            }
+            liveG.innerHTML = "";
+            try {
+              defs.removeChild(mask);
+            } catch (_) {}
+            appendDone(i);
+            then && then();
+          };
+          raf = requestAnimationFrame(tick);
+        }
+
+        function playFromCurrent() {
+          if (destroyed) return;
+          if (!medians || medians.length !== strokes.length) return;
+          if (strokeIndex >= strokes.length) resetToStart(true);
+          if (strokeIndex === 0 && doneG.childNodes.length === strokes.length) {
+            doneG.innerHTML = "";
+          }
+          playing = true;
+          paused = false;
+          syncPlayBtn();
+
+          const step = () => {
+            if (destroyed || paused) return;
+            if (strokeIndex >= strokes.length) {
+              playing = false;
+              syncPlayBtn();
+              return;
+            }
+            const i = strokeIndex;
+            animateStroke(i, () => {
+              strokeIndex = i + 1;
+              if (destroyed || paused) return;
+              if (strokeIndex >= strokes.length) {
+                playing = false;
+                syncPlayBtn();
+                return;
+              }
+              timer = setTimeout(step, timingNow().gapMs);
+            });
+          };
+          step();
+        }
+
+        function pause() {
+          paused = true;
+          playing = false;
+          clearTimers();
+          syncPlayBtn();
+        }
+
+        function playOrPause() {
+          if (playing && !paused) pause();
+          else playFromCurrent();
+        }
+
+        function nextStroke() {
+          pause();
+          if (!medians || medians.length !== strokes.length) return;
+          if (strokeIndex === 0 && doneG.childNodes.length === strokes.length) {
+            doneG.innerHTML = "";
+          }
+          if (strokeIndex >= strokes.length) resetToStart(true);
+          if (strokeIndex >= strokes.length) return;
+          liveG.innerHTML = "";
+          appendDone(strokeIndex);
+          strokeIndex++;
+        }
+
+        function replay() {
+          resetToStart(true);
+          playFromCurrent();
+        }
+
+        syncPlayBtn();
+
+        return {
+          setMedians(next) {
+            if (!Array.isArray(next) || next.length !== strokes.length) return false;
+            medians = next;
+            return true;
+          },
+          playOrPause,
+          nextStroke,
+          replay,
+          destroy() {
+            destroyed = true;
+            clearTimers();
+            host.innerHTML = "";
+          },
+        };
+      }
+
+      function startMoeDemo(strokes, medians, ch) {
+        destroyMoeDemo();
+        if (!els.moeDemoHost || !els.moeBox || els.moeBox.hidden) return;
+        if (!strokes || !strokes.length) return;
+
+        const showLoading = (msg) => {
+          els.moeDemoHost.innerHTML =
+            "<div style='padding:16px;text-align:center;font:700 14px/1.5 sans-serif;color:#6a8499'>" +
+            msg +
+            "</div>";
+        };
+
+        const run = (m) => {
+          if (writingChar !== ch) return;
+          if (!m || m.length !== strokes.length) {
+            showLoading("無法取得筆順方向（請確認可連線教育部 Track API）");
+            return;
+          }
+          moeDemo = createLocalStrokeDemo(els.moeDemoHost, strokes, m);
+        };
+
+        if (medians && medians.length === strokes.length) {
+          run(medians);
+          return;
+        }
+
+        showLoading("載入筆順方向（教育部 Track）…");
+        Promise.resolve()
+          .then(() => loadMoeTrackMedians(ch, strokes.length))
+          .then((m) => m || loadMediansJson(ch, strokes.length))
+          .then((m) => {
+            if (m && writingChar === ch) {
+              // 同步回寫快取，給左邊判讀用
+              const data = charDataMemory[ch];
+              if (data) {
+                data.medians = m;
+                data.source = data.source && String(data.source).indexOf("moe") >= 0
+                  ? data.source
+                  : "local-svg+moe-track";
+                charDataMemory[ch] = data;
+                idbSetChar(ch, data);
+                if (quiz && typeof quiz.setMedians === "function") quiz.setMedians(m);
+              }
+            }
+            run(m);
+          })
+          .catch(() => run(null));
+      }
+
+      function createStrokeQuiz(host, strokes, opts) {
+        const fromJpg =
+          opts && Array.isArray(opts.medians) && opts.medians.length === strokes.length
+            ? opts.medians
+            : null;
+        let medians = fromJpg || strokes.map((d) => approxMedian(d, 32));
+        const ns = "http://www.w3.org/2000/svg";
+        host.innerHTML = "";
+        const svg = document.createElementNS(ns, "svg");
+        svg.setAttribute("class", "stroke-board");
+        svg.setAttribute("viewBox", "0 0 " + SVG_VIEW + " " + SVG_VIEW);
+        svg.setAttribute("width", "100%");
+        svg.setAttribute("height", "100%");
+
+        const outlineG = document.createElementNS(ns, "g");
+        outlineG.setAttribute("fill", "#c5d9ea");
+        strokes.forEach((d) => {
+          const p = document.createElementNS(ns, "path");
+          p.setAttribute("d", d);
+          outlineG.appendChild(p);
+        });
+        outlineG.style.display = opts.showOutline ? "" : "none";
+
+        const doneG = document.createElementNS(ns, "g");
+        doneG.setAttribute("fill", "#16324f");
+
+        const hintG = document.createElementNS(ns, "g");
+        const userG = document.createElementNS(ns, "g");
+        const userPath = document.createElementNS(ns, "path");
+        userPath.setAttribute("fill", "none");
+        userPath.setAttribute("stroke", "#1f8fd6");
+        userPath.setAttribute("stroke-width", "18");
+        userPath.setAttribute("stroke-linecap", "round");
+        userPath.setAttribute("stroke-linejoin", "round");
+        userG.appendChild(userPath);
+
+        svg.appendChild(outlineG);
+        svg.appendChild(doneG);
+        svg.appendChild(hintG);
+        svg.appendChild(userG);
+        host.appendChild(svg);
+
+        let strokeIndex = 0;
+        let drawing = false;
+        let points = [];
+        let active = true;
+        let demoTimer = null;
+        const listeners = opts || {};
+
+        function clearDemo() {
+          if (demoTimer) {
+            clearTimeout(demoTimer);
+            demoTimer = null;
+          }
+        }
+
+        function setHint() {
+          hintG.innerHTML = "";
+          if (!active || strokeIndex >= strokes.length) return;
+          if (!els.hintStrokeCheck.checked) return;
+          const p = document.createElementNS(ns, "path");
+          p.setAttribute("d", strokes[strokeIndex]);
+          p.setAttribute("class", "hint-stroke");
+          hintG.appendChild(p);
+        }
+
+        function ptsToD(pts) {
+          if (!pts.length) return "";
+          let d = "M " + pts[0].x + " " + pts[0].y;
+          for (let i = 1; i < pts.length; i++) d += " L " + pts[i].x + " " + pts[i].y;
+          return d;
+        }
+
+        function clientToSvg(clientX, clientY) {
+          const pt = svg.createSVGPoint();
+          pt.x = clientX;
+          pt.y = clientY;
+          const ctm = svg.getScreenCTM();
+          if (!ctm) return { x: 0, y: 0 };
+          const loc = pt.matrixTransform(ctm.inverse());
+          return { x: loc.x, y: loc.y };
+        }
+
+        function finishStroke() {
+          if (!active || points.length < 2) {
+            points = [];
+            userPath.setAttribute("d", "");
+            return;
+          }
+          const ok = matchStroke(points, medians[strokeIndex]);
+          points = [];
+          userPath.setAttribute("d", "");
+          if (!ok) {
+            if (listeners.onMistake) listeners.onMistake();
+            return;
+          }
+          const p = document.createElementNS(ns, "path");
+          p.setAttribute("d", strokes[strokeIndex]);
+          doneG.appendChild(p);
+          strokeIndex++;
+          setHint();
+          if (listeners.onCorrectStroke) {
+            listeners.onCorrectStroke({ strokeNum: strokeIndex - 1, totalStrokes: strokes.length });
+          }
+          if (strokeIndex >= strokes.length) {
+            active = false;
+            hintG.innerHTML = "";
+            if (listeners.onComplete) listeners.onComplete();
+          }
+        }
+
+        function onPointerDown(e) {
+          if (!active || strokeIndex >= strokes.length) return;
+          clearDemo();
+          e.preventDefault();
+          svg.setPointerCapture(e.pointerId);
+          drawing = true;
+          points = [clientToSvg(e.clientX, e.clientY)];
+          userPath.setAttribute("d", ptsToD(points));
+        }
+        function onPointerMove(e) {
+          if (!drawing) return;
+          e.preventDefault();
+          points.push(clientToSvg(e.clientX, e.clientY));
+          userPath.setAttribute("d", ptsToD(points));
+        }
+        function onPointerUp(e) {
+          if (!drawing) return;
+          e.preventDefault();
+          drawing = false;
+          try {
+            svg.releasePointerCapture(e.pointerId);
+          } catch (_) {}
+          finishStroke();
+        }
+
+        svg.addEventListener("pointerdown", onPointerDown);
+        svg.addEventListener("pointermove", onPointerMove);
+        svg.addEventListener("pointerup", onPointerUp);
+        svg.addEventListener("pointercancel", onPointerUp);
+
+        setHint();
+
+        return {
+          setShowOutline(v) {
+            outlineG.style.display = v ? "" : "none";
+          },
+          refreshHint() {
+            setHint();
+          },
+          setMedians(next) {
+            if (!Array.isArray(next) || next.length !== strokes.length) return false;
+            medians = next;
+            return true;
+          },
+          restart() {
+            clearDemo();
+            active = true;
+            strokeIndex = 0;
+            drawing = false;
+            points = [];
+            doneG.innerHTML = "";
+            userPath.setAttribute("d", "");
+            setHint();
+          },
+          destroy() {
+            clearDemo();
+            active = false;
+            svg.removeEventListener("pointerdown", onPointerDown);
+            svg.removeEventListener("pointermove", onPointerMove);
+            svg.removeEventListener("pointerup", onPointerUp);
+            svg.removeEventListener("pointercancel", onPointerUp);
+            host.innerHTML = "";
+          },
+        };
+      }
+
+      function extractHan(text) {
+        const out = [];
+        const seen = new Set();
+        for (const ch of Array.from(String(text || ""))) {
+          if (!/[\u4e00-\u9fff\u3400-\u4dbf]/.test(ch)) continue;
+          if (seen.has(ch)) continue;
+          seen.add(ch);
+          out.push(ch);
+        }
+        return out;
+      }
+
+      function extractHanOrdered(text) {
+        const out = [];
+        for (const ch of Array.from(String(text || ""))) {
+          if (/[\u4e00-\u9fff\u3400-\u4dbf]/.test(ch)) out.push(ch);
+        }
+        return out;
+      }
+
+      function parseVocabList(cell) {
+        return String(cell || "")
+          .split(/[、，,;；\n]+/)
+          .map((s) => s.trim())
+          .map((s) => {
+            const chars = extractHanOrdered(s);
+            return { raw: s, chars: chars, speak: chars.join("") };
+          })
+          .filter((v) => v.chars.length > 0);
+      }
+
+      function seatLabel(seat) {
+        if (!seat) return "";
+        const name = (seat.name || "").trim();
+        return name ? name : seat.id + "號";
+      }
+
+      function activeSeat() {
+        if (state.activeSeatId == null) return null;
+        return state.seats.find((s) => s.id === state.activeSeatId) || null;
+      }
+
+      function normalizeCharRecord(rec) {
+        if (!rec || typeof rec !== "object") return { freehand: 0, outline: false };
+        return {
+          freehand: Math.max(0, Math.min(2, Number(rec.freehand) || 0)),
+          outline: !!rec.outline,
+        };
+      }
+
+      function progressMapFor(seatId) {
+        const raw = state.progress[String(seatId)];
+        if (!raw) return {};
+        // 舊格式：字陣列 → 視為無底圖完成 1 次
+        if (Array.isArray(raw)) {
+          const map = {};
+          raw.forEach((ch) => {
+            if (ch) map[ch] = { freehand: 1, outline: false };
+          });
+          return map;
+        }
+        if (typeof raw !== "object") return {};
+        const map = {};
+        Object.keys(raw).forEach((ch) => {
+          map[ch] = normalizeCharRecord(raw[ch]);
+        });
+        return map;
+      }
+
+      function charRecordFor(seatId, ch) {
+        const map = progressMapFor(seatId);
+        return normalizeCharRecord(map[ch]);
+      }
+
+      function isCharPracticed(rec) {
+        return !!rec && (rec.freehand > 0 || rec.outline);
+      }
+
+      function doneSetFor(seatId) {
+        const map = progressMapFor(seatId);
+        return new Set(Object.keys(map).filter((ch) => isCharPracticed(map[ch])));
+      }
+
+      function ensureSeatProgressKeys() {
+        state.seats.forEach((s) => {
+          const k = String(s.id);
+          const raw = state.progress[k];
+          if (Array.isArray(raw)) {
+            const map = {};
+            raw.forEach((ch) => {
+              if (ch) map[ch] = { freehand: 1, outline: false };
+            });
+            state.progress[k] = map;
+          } else if (!raw || typeof raw !== "object") {
+            state.progress[k] = {};
+          }
+        });
+      }
+
+      function markCharPractice(seat, ch, usedOutline) {
+        const key = String(seat.id);
+        ensureSeatProgressKeys();
+        if (!state.progress[key] || typeof state.progress[key] !== "object" || Array.isArray(state.progress[key])) {
+          state.progress[key] = progressMapFor(seat.id);
+        }
+        const rec = charRecordFor(seat.id, ch);
+        if (usedOutline) {
+          rec.outline = true;
+        } else {
+          rec.freehand = Math.min(2, (rec.freehand || 0) + 1);
+        }
+        state.progress[key][ch] = rec;
+        save();
+        return rec;
+      }
+
+      function rebuildNamesEdit() {
+        const n = Math.max(1, Math.min(50, parseInt(els.seatCountInput.value, 10) || 1));
+        const prev = {};
+        els.namesEdit.querySelectorAll("input[data-id]").forEach((inp) => {
+          prev[inp.getAttribute("data-id")] = inp.value;
+        });
+        state.seats.forEach((s) => {
+          prev[String(s.id)] = s.name || prev[String(s.id)] || "";
+        });
+        els.namesEdit.innerHTML = "";
+        for (let i = 1; i <= n; i++) {
+          const wrap = document.createElement("label");
+          wrap.className = "mini";
+          wrap.innerHTML = "<span>" + i + "號</span>";
+          const input = document.createElement("input");
+          input.type = "text";
+          input.setAttribute("data-id", String(i));
+          input.placeholder = "姓名";
+          input.value = prev[String(i)] || "";
+          wrap.appendChild(input);
+          els.namesEdit.appendChild(wrap);
+        }
+      }
+
+      function fillSetupForm() {
+        els.seatCountInput.value = String(state.seats.length || 1);
+        els.charsInput.value = (state.newChars && state.newChars.length
+          ? state.newChars
+          : state.chars || []
+        ).join("");
+        if (els.reviewCharsInput) {
+          els.reviewCharsInput.value = (state.reviewChars || []).join("");
+        }
+        fillLessonSelect(state.lessonId || "");
+        rebuildNamesEdit();
+        state.seats.forEach((s) => {
+          const inp = els.namesEdit.querySelector('input[data-id="' + s.id + '"]');
+          if (inp) inp.value = s.name || "";
+        });
+      }
+
+      function openSetup() {
+        renderClassSwitch();
+        fillSetupForm();
+        els.setupOverlay.hidden = false;
+        if (!lessonCatalog.length && !OFFLINE_PACK) reloadLessons(true);
+      }
+      function closeSetup() {
+        els.setupOverlay.hidden = true;
+      }
+
+      function openSeatPicker() {
+        renderSeatPicker();
+        els.seatOverlay.hidden = false;
+      }
+      function closeSeatPicker() {
+        els.seatOverlay.hidden = true;
+      }
+
+      function renderSeatPicker() {
+        els.seatGrid.innerHTML = "";
+        if (!state.seats.length) {
+          els.seatGrid.innerHTML = "<p class='hint'>請先在設定裡設定人數。</p>";
+          return;
+        }
+        state.seats.forEach((seat) => {
+          const btn = document.createElement("button");
+          btn.type = "button";
+          btn.className = "seat-btn";
+          const done = doneSetFor(seat.id);
+          const allDone = state.chars.length > 0 && state.chars.every((c) => done.has(c));
+          if (seat.id === state.activeSeatId) btn.classList.add("active");
+          if (allDone) btn.classList.add("done-all");
+          btn.innerHTML = '<span class="no">' + seat.id + "號</span>" + escapeHtml(seatLabel(seat));
+          btn.addEventListener("click", () => {
+            state.activeSeatId = seat.id;
+            save();
+            closeSeatPicker();
+            renderAll();
+          });
+          els.seatGrid.appendChild(btn);
+        });
+      }
+
+      function renderQuickSeats() {
+        if (!state.seats.length) {
+          els.quickSeats.hidden = true;
+          els.quickSeats.innerHTML = "";
+          return;
+        }
+        els.quickSeats.hidden = false;
+        els.quickSeats.innerHTML = "";
+        state.seats.forEach((seat) => {
+          const btn = document.createElement("button");
+          btn.type = "button";
+          btn.className = "seat-btn";
+          if (seat.id === state.activeSeatId) btn.classList.add("active");
+          const done = doneSetFor(seat.id);
+          if (state.chars.length && state.chars.every((c) => done.has(c))) btn.classList.add("done-all");
+          btn.innerHTML = '<span class="no">' + seat.id + "</span>" + escapeHtml(seatLabel(seat));
+          btn.addEventListener("click", () => {
+            state.activeSeatId = seat.id;
+            save();
+            renderAll();
+          });
+          els.quickSeats.appendChild(btn);
+        });
+      }
+
+      function escapeHtml(s) {
+        return String(s)
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;");
+      }
+
+      function renderTop() {
+        const clsName = (activeClassMeta() && activeClassMeta().name) || "美洲一冊";
+        const lesson = (state.lessonName || "").trim() || "尚未選課次";
+        const n = state.chars.length;
+        const nNew = (state.newChars || []).length;
+        const nRev = (state.reviewChars || []).length;
+        els.classSub.textContent =
+          clsName +
+          "｜" +
+          lesson +
+          (n
+            ? "｜" + n + " 字" + (nRev ? "（新 " + nNew + "＋複 " + nRev + "）" : "")
+            : "");
+        const seat = activeSeat();
+        if (seat) {
+          els.seatNowBtn.classList.remove("empty");
+          els.seatNowBtn.textContent = "目前：" + seatLabel(seat);
+        } else {
+          els.seatNowBtn.classList.add("empty");
+          els.seatNowBtn.textContent = "請先選座號";
+        }
+      }
+
+      function renderProgress() {
+        const seat = activeSeat();
+        const total = state.chars.length;
+        if (!seat || !total) {
+          els.meterFill.style.width = "0%";
+          els.meterLabel.textContent = seat ? "0 / " + total : "先選座號";
+          return;
+        }
+        const done = doneSetFor(seat.id);
+        const count = state.chars.filter((c) => done.has(c)).length;
+        const pct = Math.round((count / total) * 100);
+        els.meterFill.style.width = pct + "%";
+        els.meterLabel.textContent = count + " / " + total;
+      }
+
+      function renderBubbles() {
+        const hasChars = state.chars.length > 0;
+        els.emptyHint.hidden = hasChars;
+        els.bubbles.hidden = !hasChars;
+        if (!hasChars) {
+          els.emptyHint.textContent = state.seats.length
+            ? "請在「設定」選擇課次或輸入生字。"
+            : "請按右上角「設定」，選擇課次。";
+          els.bubbles.innerHTML = "";
+          return;
+        }
+        const seat = activeSeat();
+        const reviewSet = new Set(state.reviewChars || []);
+        const newSet = new Set(state.newChars || []);
+        els.bubbles.innerHTML = "";
+        state.chars.forEach((ch) => {
+          const btn = document.createElement("button");
+          btn.type = "button";
+          btn.className = "bubble";
+          const isReview = reviewSet.has(ch) && !newSet.has(ch);
+          if (isReview) btn.classList.add("review");
+          btn.textContent = ch;
+          const rec = seat ? charRecordFor(seat.id, ch) : { freehand: 0, outline: false };
+          const hinted =
+            !!seat && vocabHintedListForSeat(seat.id).indexOf(ch) >= 0;
+          let levelLabel = "尚未練習";
+          if (rec.freehand >= 2) {
+            btn.classList.add("level-free2");
+            levelLabel = "無底圖完成兩次";
+          } else if (rec.freehand >= 1) {
+            btn.classList.add("level-free");
+            levelLabel = "無底圖完成";
+          } else if (rec.outline) {
+            btn.classList.add("level-outline");
+            levelLabel = "有底圖完成";
+          } else if (hinted) {
+            btn.classList.add("level-hint");
+            levelLabel = "聽寫曾看筆順";
+          }
+          btn.setAttribute(
+            "aria-label",
+            (isReview ? "複習字 " : "生字 ") + ch + "（" + levelLabel + "）"
+          );
+          if (!seat) btn.classList.add("locked");
+          btn.addEventListener("click", () => {
+            if (!seat) {
+              openSeatPicker();
+              return;
+            }
+            openWrite(ch);
+          });
+          els.bubbles.appendChild(btn);
+        });
+      }
+
+      function renderAll() {
+        renderTop();
+        renderProgress();
+        renderQuickSeats();
+        renderBubbles();
+      }
+
+      function destroyQuiz() {
+        quizActive = false;
+        if (quiz) {
+          try {
+            quiz.destroy();
+          } catch (_) {}
+        }
+        quiz = null;
+        if (els.hanziTarget) els.hanziTarget.innerHTML = "";
+      }
+
+      function startQuiz(strokes, medians, source) {
+        if (!writingChar || !strokes || !strokes.length) return;
+        destroyQuiz();
+        quizActive = true;
+        practiceUsedOutline = !!els.outlineNowCheck.checked;
+        els.writeMsg.textContent = medians
+          ? source && String(source).indexOf("moe") >= 0
+            ? "請依教育部筆順一筆一筆寫；寫錯會清掉那一筆。"
+            : "請依筆順一筆一筆寫；寫錯會清掉那一筆。"
+          : "請開始寫；教育部方向載入中…";
+        els.writeMsg.className = "write-msg";
+        quiz = createStrokeQuiz(els.hanziTarget, strokes, {
+          showOutline: !!els.outlineNowCheck.checked,
+          medians: medians || null,
+          onCorrectStroke(data) {
+            els.writeMsg.textContent =
+              "第 " + (data.strokeNum + 1) + " 筆正確／共 " + data.totalStrokes + " 筆";
+            els.writeMsg.className = "write-msg ok";
+          },
+          onMistake() {
+            els.writeMsg.textContent = "這一筆不對，已清掉，請再寫一次。";
+            els.writeMsg.className = "write-msg bad";
+          },
+          onComplete() {
+            quizActive = false;
+            if (writeContext && writeContext.type === "vocab") {
+              els.writeMsg.textContent = "寫對了！";
+              els.writeMsg.className = "write-msg ok";
+              const ctx = writeContext;
+              setTimeout(() => {
+                closeWrite();
+                onVocabCharComplete(ctx);
+              }, 450);
+              return;
+            }
+            const seat = activeSeat();
+            if (!seat || !writingChar) return;
+            const usedOutline =
+              practiceUsedOutline || !!(els.outlineNowCheck && els.outlineNowCheck.checked);
+            const rec = markCharPractice(seat, writingChar, usedOutline);
+            if (usedOutline) {
+              els.writeMsg.textContent = "完成了！有用底圖 → 淺藍（關掉底圖再練可變綠）";
+            } else if (rec.freehand >= 2) {
+              els.writeMsg.textContent = "無底圖完成兩次！打勾 ✨";
+            } else {
+              els.writeMsg.textContent = "無底圖寫對了！泡泡變綠 ✨";
+            }
+            els.writeMsg.className = "write-msg ok";
+            setTimeout(() => {
+              closeWrite();
+              renderAll();
+              maybeGift(seat);
+            }, 550);
+          },
+        });
+      }
+
+      function openWrite(ch, ctx) {
+        writingChar = ch;
+        writeContext = ctx || { type: "bubble" };
+        practiceUsedOutline = false;
+        els.writeMsg.textContent = "載入筆順中…";
+        els.writeMsg.className = "write-msg";
+        const isVocab = writeContext.type === "vocab";
+        // 語詞聽寫：底圖／提示預設不勾；不顯示右側筆順動畫
+        // 底圖／提示預設一律不勾；語詞聽寫不顯示右側筆順（用 📖）；泡泡練習一律本機右側筆順
+        els.outlineNowCheck.checked = false;
+        if (els.hintStrokeCheck) els.hintStrokeCheck.checked = false;
+        const showMoe = !isVocab;
+        if (els.moeBox) els.moeBox.hidden = !showMoe;
+        if (els.writeLayout) els.writeLayout.classList.toggle("has-moe", showMoe);
+        destroyMoeDemo();
+        els.writeOverlay.hidden = false;
+        destroyQuiz();
+
+        const size = Math.min(420, Math.floor(window.innerWidth * 0.86), Math.floor(window.innerHeight * 0.52));
+        els.hanziTarget.style.width = size + "px";
+        els.hanziTarget.style.height = size + "px";
+        if (els.moeDemoHost) {
+          els.moeDemoHost.style.width = size + "px";
+          els.moeDemoHost.style.height = size + "px";
+          els.moeDemoHost.style.maxHeight = "none";
+        }
+
+        loadCharData(ch)
+          .then((data) => {
+            if (writingChar !== ch) return;
+            startQuiz(data.strokes, data.medians || null, data.source);
+            if (showMoe) startMoeDemo(data.strokes, data.medians || null, ch);
+          })
+          .catch((e) => {
+            els.writeMsg.textContent =
+              (e && e.message ? e.message : "載入失敗") +
+              "。請確認本機有 svg/" +
+              ch +
+              "/，或重新匯出離線包。";
+            els.writeMsg.className = "write-msg bad";
+          });
+      }
+
+      function closeWrite() {
+        destroyQuiz();
+        destroyMoeDemo();
+        els.writeOverlay.hidden = true;
+        writingChar = "";
+        writeContext = { type: "bubble" };
+      }
+
+      function voiceNameHas(v, ...needles) {
+        const n = ((v && v.name) || "").toLowerCase();
+        return needles.some((x) => n.includes(String(x).toLowerCase()));
+      }
+
+      function pickVoiceZh() {
+        if (!("speechSynthesis" in window)) return null;
+        const voices = window.speechSynthesis.getVoices();
+        if (!voices || !voices.length) return null;
+        const zh = voices.filter((v) => (v.lang || "").toLowerCase().startsWith("zh-tw"));
+        if (zh.length) {
+          const m = zh.find((v) => voiceNameHas(v, "美佳", "meijia"));
+          return m || zh[0];
+        }
+        return voices.find((v) => (v.lang || "").toLowerCase().startsWith("zh")) || voices[0];
+      }
+
+      /** 廣東話：Mac/iPad Sinji信佳 → Windows Szeto/Huihui → Android/Chrome Google 廣東話 → zh-HK/yue */
+      function pickVoiceYue() {
+        if (!("speechSynthesis" in window)) return null;
+        const voices = window.speechSynthesis.getVoices();
+        if (!voices || !voices.length) return null;
+        const byName = (...needles) => voices.find((v) => voiceNameHas(v, ...needles));
+        let v = byName("sinji", "信佳");
+        if (v) return v;
+        v = byName("szeto");
+        if (v) return v;
+        v = byName("huihui");
+        if (v) return v;
+        v = voices.find((x) => {
+          if (!voiceNameHas(x, "google")) return false;
+          const l = (x.lang || "").toLowerCase();
+          return (
+            voiceNameHas(x, "cantonese", "廣東", "粤", "粵", "hong kong") ||
+            l.includes("yue") ||
+            l === "zh-hk" ||
+            l.includes("hk")
+          );
+        });
+        if (v) return v;
+        v = byName("cantonese", "廣東話", "粤语", "粵語", "hiugaai", "hiu gaai");
+        if (v) return v;
+        const yueLang = voices.filter((x) => {
+          const l = (x.lang || "").toLowerCase();
+          return l.startsWith("yue") || l === "zh-hk" || l.includes("yue") || l === "zh-yue";
+        });
+        if (yueLang.length) return yueLang[0];
+        return null;
+      }
+
+      function speakOnce(text, lang, voice) {
+        return new Promise((resolve) => {
+          if (!("speechSynthesis" in window)) {
+            resolve();
+            return;
+          }
+          const u = new SpeechSynthesisUtterance(text);
+          u.lang = lang;
+          u.rate = 0.8;
+          if (voice) u.voice = voice;
+          u.onend = () => resolve();
+          u.onerror = () => resolve();
+          window.speechSynthesis.speak(u);
+        });
+      }
+
+      function delayMs(ms) {
+        return new Promise((resolve) => setTimeout(resolve, ms));
+      }
+
+      /** 中文／廣東話／先中文再廣東話（與聽寫語詞考試相同） */
+      function speakVocab(text) {
+        const t = extractHanOrdered(text).join("");
+        if (!t) return;
+        if (!("speechSynthesis" in window)) return;
+        try {
+          window.speechSynthesis.cancel();
+        } catch (_) {}
+        const mode = speakLangMode;
+        const vZh = pickVoiceZh();
+        const vYue = pickVoiceYue() || vZh;
+        (async () => {
+          if (mode === "zh" || mode === "both") {
+            await speakOnce(t, "zh-TW", vZh);
+          }
+          if (mode === "both") await delayMs(400);
+          if (mode === "yue" || mode === "both") {
+            await speakOnce(t, "zh-HK", vYue);
+          }
+        })();
+      }
+
+      function syncVocabVoiceButtons() {
+        [els.vocabVoiceModeSetup, els.vocabVoiceModePlay].forEach((wrap) => {
+          if (!wrap) return;
+          wrap.querySelectorAll(".voice-mode-btn").forEach((btn) => {
+            btn.classList.toggle("active", btn.getAttribute("data-mode") === speakLangMode);
+          });
+        });
+      }
+
+      function initVocabVoiceModeControls() {
+        const onClick = (e) => {
+          const btn = e.target.closest(".voice-mode-btn");
+          if (!btn) return;
+          const mode = btn.getAttribute("data-mode");
+          if (mode !== "zh" && mode !== "yue" && mode !== "both") return;
+          speakLangMode = mode;
+          try {
+            localStorage.setItem(SPEAK_LANG_KEY, speakLangMode);
+          } catch (_) {}
+          syncVocabVoiceButtons();
+        };
+        [els.vocabVoiceModeSetup, els.vocabVoiceModePlay].forEach((wrap) => {
+          if (wrap) wrap.addEventListener("click", onClick);
+        });
+        syncVocabVoiceButtons();
+      }
+
+      function lessonsForCatalogKey(key) {
+        const k = String(key || "").trim();
+        if (!k) return [];
+        return lessonCatalog.filter((les) => String(les.catalogKey || "").trim() === k);
+      }
+
+      function preferredExamLabel() {
+        if (state.lessonId) {
+          const les = lessonCatalog.find((x) => x.id === state.lessonId);
+          if (les && les.catalogKey) {
+            const hit = examCatalog.find((e) => e.label === les.catalogKey);
+            if (hit) return hit.label;
+          }
+        }
+        return "";
+      }
+
+      function fillVocabLessonSelect() {
+        if (!els.vocabLessonSelect) return;
+        const sel = els.vocabLessonSelect;
+        sel.innerHTML = "";
+        const blank = document.createElement("option");
+        blank.value = "";
+        const cls = activeClassMeta();
+        blank.textContent = examCatalog.length
+          ? "請選擇目錄／週次"
+          : cls && cls.examSheetId
+            ? "尚無考試目錄"
+            : "此班級尚未設定考試試算表";
+        sel.appendChild(blank);
+        examCatalog.forEach((ex) => {
+          const n = (ex.words || []).length;
+          if (!n) return;
+          const matched = lessonsForCatalogKey(ex.label);
+          const opt = document.createElement("option");
+          opt.value = ex.label;
+          opt.textContent =
+            ex.label +
+            "（" +
+            n +
+            " 題" +
+            (matched.length ? "／" + matched.map((m) => m.name).join("、") : "") +
+            "）";
+          sel.appendChild(opt);
+        });
+        const prefer = preferredExamLabel();
+        if (prefer && [...sel.options].some((o) => o.value === prefer)) {
+          sel.value = prefer;
+        }
+        updateVocabLessonHint();
+      }
+
+      function updateVocabLessonHint() {
+        if (!els.vocabLessonHint) return;
+        const label = els.vocabLessonSelect && els.vocabLessonSelect.value;
+        const ex = examCatalog.find((x) => x.label === label);
+        if (!ex) {
+          els.vocabLessonHint.textContent =
+            "選目錄後會載入該週考試語詞（生字表 I 欄＝考試表 A 欄）。";
+          return;
+        }
+        const matched = lessonsForCatalogKey(ex.label);
+        const matchTxt = matched.length
+          ? "對應生字課次：" + matched.map((m) => m.name).join("、") + "。"
+          : "生字表尚無同目錄課次。";
+        els.vocabLessonHint.textContent =
+          "「" +
+          ex.label +
+          "」共 " +
+          ex.words.length +
+          " 題：" +
+          ex.words.map((v) => v.speak).join("、") +
+          "。" +
+          matchTxt;
+      }
+
+      function openVocabExam() {
+        if (els.vocabSetupPanel) els.vocabSetupPanel.hidden = false;
+        if (els.vocabPlayPanel) els.vocabPlayPanel.hidden = true;
+        if (els.vocabSummaryPanel) els.vocabSummaryPanel.hidden = true;
+        vocabSession = null;
+        syncVocabVoiceButtons();
+        ensureVocabCatalogs(false)
+          .catch((e) => {
+            alert((e && e.message) || "載入試算表失敗");
+          })
+          .then(() => {
+            fillVocabLessonSelect();
+            if (els.vocabExamOverlay) els.vocabExamOverlay.hidden = false;
+          });
+      }
+
+      function dismissVocabExamUI() {
+        vocabSession = null;
+        closeVocabStrokeHint();
+        if (els.vocabExamOverlay) els.vocabExamOverlay.hidden = true;
+        if (els.vocabSetupPanel) els.vocabSetupPanel.hidden = false;
+        if (els.vocabPlayPanel) els.vocabPlayPanel.hidden = true;
+        if (els.vocabSummaryPanel) els.vocabSummaryPanel.hidden = true;
+        if ("speechSynthesis" in window) {
+          try {
+            window.speechSynthesis.cancel();
+          } catch (_) {}
+        }
+        renderAll();
+      }
+
+      function showVocabHintSummary(hinted) {
+        closeVocabStrokeHint();
+        if ("speechSynthesis" in window) {
+          try {
+            window.speechSynthesis.cancel();
+          } catch (_) {}
+        }
+        if (els.vocabSetupPanel) els.vocabSetupPanel.hidden = true;
+        if (els.vocabPlayPanel) els.vocabPlayPanel.hidden = true;
+        if (els.vocabSummaryPanel) els.vocabSummaryPanel.hidden = false;
+        if (els.vocabExamOverlay) els.vocabExamOverlay.hidden = false;
+        const list = Array.isArray(hinted) ? hinted.filter(Boolean) : [];
+        if (els.vocabSummaryHint) {
+          const seat = activeSeat();
+          const who = seat ? seatLabel(seat) : "這位學生";
+          els.vocabSummaryHint.textContent = list.length
+            ? "本輪曾用 📖 查看筆順的字如下；只會把「" +
+              who +
+              "」的對應泡泡先變成粉紅色，其他學生不變。之後練習變色規則不變。"
+            : "本輪沒有按過 📖。可以直接回到泡泡練習。";
+        }
+        if (els.vocabSummaryChars) {
+          if (!list.length) {
+            els.vocabSummaryChars.innerHTML =
+              "<p class='vocab-summary-empty'>沒有查看過筆順的字</p>";
+          } else {
+            els.vocabSummaryChars.innerHTML = list
+              .map((ch) => "<span class='chip'>" + escapeHtml(ch) + "</span>")
+              .join("");
+          }
+        }
+      }
+
+      /** 結束聽寫：只合併「這位考生」的粉泡標記 → 列出曾看過的字 → 回泡泡 */
+      function finishVocabExam() {
+        const hinted =
+          vocabSession && vocabSession.hintedChars
+            ? Array.from(vocabSession.hintedChars)
+            : [];
+        const seatId =
+          vocabSession && vocabSession.seatId != null
+            ? vocabSession.seatId
+            : activeSeat() && activeSeat().id;
+        if (seatId != null) mergeVocabHintedCharsForSeat(seatId, hinted);
+        save();
+        showVocabHintSummary(hinted);
+        vocabSession = null;
+      }
+
+      function closeVocabExam() {
+        // 設定頁關閉：直接關掉；練習中結束：先結算粉泡
+        if (vocabSession && els.vocabPlayPanel && !els.vocabPlayPanel.hidden) {
+          finishVocabExam();
+          return;
+        }
+        if (els.vocabSummaryPanel && !els.vocabSummaryPanel.hidden) {
+          dismissVocabExamUI();
+          return;
+        }
+        dismissVocabExamUI();
+      }
+
+      function startVocabExam() {
+        const seat = activeSeat();
+        if (!seat) {
+          alert("請先選目前考試的學生座號，粉紅泡泡只會記在這位學生身上。");
+          openSeatPicker();
+          return;
+        }
+        const label = els.vocabLessonSelect && els.vocabLessonSelect.value;
+        const ex = examCatalog.find((x) => x.label === label);
+        const list = ex && Array.isArray(ex.words) ? ex.words.slice() : [];
+        if (!list.length) {
+          alert("請先選擇有語詞的目錄／週次。");
+          return;
+        }
+        const matched = lessonsForCatalogKey(ex.label);
+        vocabSession = {
+          seatId: seat.id,
+          lessonId: ex.label,
+          lessonName: ex.label + (matched.length ? "（" + matched.map((m) => m.name).join("、") + "）" : ""),
+          words: list,
+          index: 0,
+          doneSlots: [],
+          hintedChars: new Set(),
+        };
+        if (els.vocabSetupPanel) els.vocabSetupPanel.hidden = true;
+        if (els.vocabSummaryPanel) els.vocabSummaryPanel.hidden = true;
+        if (els.vocabPlayPanel) els.vocabPlayPanel.hidden = false;
+        syncVocabVoiceButtons();
+        renderVocabWord();
+        setTimeout(() => speakVocab(list[0].speak), 250);
+      }
+
+      function currentVocabWord() {
+        if (!vocabSession) return null;
+        return vocabSession.words[vocabSession.index] || null;
+      }
+
+      function destroyVocabHintDemo() {
+        if (vocabHintDemo && typeof vocabHintDemo.destroy === "function") {
+          try {
+            vocabHintDemo.destroy();
+          } catch (_) {}
+        }
+        vocabHintDemo = null;
+        vocabHintChar = "";
+        if (els.vocabStrokeHost) els.vocabStrokeHost.innerHTML = "";
+        if (els.vocabStrokePlayBtn) els.vocabStrokePlayBtn.textContent = "播放";
+      }
+
+      function closeVocabStrokeHint() {
+        destroyVocabHintDemo();
+        if (els.vocabStrokeOverlay) els.vocabStrokeOverlay.hidden = true;
+      }
+
+      function openVocabStrokeHint(ch) {
+        if (!ch || !els.vocabStrokeOverlay || !els.vocabStrokeHost) return;
+        if (vocabSession) {
+          if (!vocabSession.hintedChars) vocabSession.hintedChars = new Set();
+          vocabSession.hintedChars.add(ch);
+        }
+        destroyVocabHintDemo();
+        vocabHintChar = ch;
+        if (els.vocabStrokeTitle) els.vocabStrokeTitle.textContent = "筆順提示：「" + ch + "」";
+        els.vocabStrokeHost.innerHTML =
+          "<div class='moe-loading'>載入筆順中…</div>";
+        els.vocabStrokeOverlay.hidden = false;
+
+        const demoOpts = {
+          playBtn: els.vocabStrokePlayBtn,
+          speedSelect: els.vocabStrokeSpeedSelect,
+        };
+
+        loadCharData(ch)
+          .then((data) => {
+            if (vocabHintChar !== ch) return;
+            const strokes = data && data.strokes;
+            if (!strokes || !strokes.length) {
+              els.vocabStrokeHost.innerHTML =
+                "<div class='moe-loading'>找不到「" + ch + "」的筆順資料。</div>";
+              return;
+            }
+            const run = (m) => {
+              if (vocabHintChar !== ch) return;
+              if (!m || m.length !== strokes.length) {
+                els.vocabStrokeHost.innerHTML =
+                  "<div class='moe-loading'>無法取得筆順方向（請確認可連線教育部 Track API）</div>";
+                return;
+              }
+              vocabHintDemo = createLocalStrokeDemo(
+                els.vocabStrokeHost,
+                strokes,
+                m,
+                demoOpts
+              );
+            };
+            if (data.medians && data.medians.length === strokes.length) {
+              run(data.medians);
+              return;
+            }
+            els.vocabStrokeHost.innerHTML =
+              "<div class='moe-loading'>載入筆順方向（教育部 Track）…</div>";
+            Promise.resolve()
+              .then(() => loadMoeTrackMedians(ch, strokes.length))
+              .then((m) => m || loadMediansJson(ch, strokes.length))
+              .then((m) => {
+                if (m && vocabHintChar === ch) {
+                  const cached = charDataMemory[ch];
+                  if (cached) {
+                    cached.medians = m;
+                    charDataMemory[ch] = cached;
+                    idbSetChar(ch, cached);
+                  }
+                }
+                run(m);
+              })
+              .catch(() => run(null));
+          })
+          .catch((e) => {
+            if (vocabHintChar !== ch) return;
+            els.vocabStrokeHost.innerHTML =
+              "<div class='moe-loading'>" +
+              ((e && e.message) || "載入失敗") +
+              "</div>";
+          });
+      }
+
+      function renderVocabWord() {
+        if (!vocabSession || !els.vocabBoxes) return;
+        const word = currentVocabWord();
+        const total = vocabSession.words.length;
+        const idx = vocabSession.index;
+        if (els.vocabProgress) {
+          els.vocabProgress.textContent =
+            (vocabSession.lessonName || "") + "　第 " + (idx + 1) + " / " + total + " 詞";
+        }
+        if (!word) {
+          els.vocabBoxes.innerHTML =
+            "<p class='vocab-hint'>全部寫完了！太棒了。</p>";
+          return;
+        }
+        vocabSession.doneSlots = Array.from({ length: word.chars.length }, () => false);
+        els.vocabBoxes.innerHTML = "";
+        word.chars.forEach((ch, i) => {
+          const wrap = document.createElement("div");
+          wrap.className = "vocab-box-wrap";
+          const btn = document.createElement("button");
+          btn.type = "button";
+          btn.className = "vocab-box";
+          btn.textContent = "";
+          btn.setAttribute("aria-label", "第 " + (i + 1) + " 字");
+          btn.addEventListener("click", () => {
+            if (!vocabSession || vocabSession.doneSlots[i]) return;
+            openWrite(ch, { type: "vocab", charIndex: i, expected: ch });
+          });
+          const hintBtn = document.createElement("button");
+          hintBtn.type = "button";
+          hintBtn.className = "vocab-stroke-hint-btn";
+          hintBtn.textContent = "📖";
+          hintBtn.title = "看筆順動畫";
+          hintBtn.setAttribute("aria-label", "看第 " + (i + 1) + " 字筆順");
+          hintBtn.addEventListener("click", (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            openVocabStrokeHint(ch);
+          });
+          wrap.appendChild(btn);
+          wrap.appendChild(hintBtn);
+          els.vocabBoxes.appendChild(wrap);
+        });
+      }
+
+      function onVocabCharComplete(ctx) {
+        if (!vocabSession || !ctx || ctx.type !== "vocab") return;
+        const word = currentVocabWord();
+        if (!word) return;
+        const i = ctx.charIndex;
+        if (i == null || i < 0 || i >= word.chars.length) return;
+        vocabSession.doneSlots[i] = true;
+        const ch = word.chars[i];
+        const wrap = els.vocabBoxes && els.vocabBoxes.children[i];
+        const box = wrap && (wrap.querySelector ? wrap.querySelector(".vocab-box") : wrap);
+        if (box) {
+          box.classList.add("done");
+          box.textContent = ch;
+          box.disabled = true;
+        }
+        // 粉紅字：重新聽寫時若沒再按 📖 就寫對，且尚未練習過 → 直接依無底圖成功變綠
+        const seatId =
+          vocabSession.seatId != null
+            ? vocabSession.seatId
+            : activeSeat() && activeSeat().id;
+        if (seatId != null && ch) {
+          const wasPink = vocabHintedListForSeat(seatId).indexOf(ch) >= 0;
+          const lookedThisRound =
+            vocabSession.hintedChars && vocabSession.hintedChars.has(ch);
+          const rec = charRecordFor(seatId, ch);
+          const notPracticedYet = !rec.freehand && !rec.outline;
+          if (wasPink && !lookedThisRound && notPracticedYet) {
+            const seat =
+              state.seats.find((s) => s.id === seatId) || { id: seatId };
+            markCharPractice(seat, ch, false);
+          }
+        }
+        const allDone = vocabSession.doneSlots.every(Boolean);
+        if (!allDone) return;
+        setTimeout(() => {
+          if (!vocabSession) return;
+          closeVocabStrokeHint();
+          if (vocabSession.index >= vocabSession.words.length - 1) {
+            finishVocabExam();
+            return;
+          }
+          vocabSession.index += 1;
+          renderVocabWord();
+          const next = currentVocabWord();
+          if (next) setTimeout(() => speakVocab(next.speak), 200);
+        }, 500);
+      }
+
+      function restartPractice() {
+        if (!quiz || !writingChar) return;
+        quizActive = true;
+        quiz.restart();
+        els.writeMsg.textContent = "請依筆順一筆一筆寫；寫錯會清掉那一筆。";
+        els.writeMsg.className = "write-msg";
+      }
+
+      function maybeGift(seat) {
+        if (!seat || !state.chars.length) return;
+        const done = doneSetFor(seat.id);
+        const allDone = state.chars.every((c) => done.has(c));
+        if (!allDone) return;
+        const k = String(seat.id);
+        if (state.giftsClaimed[k]) return;
+        state.giftsClaimed[k] = true;
+        save();
+        const emoji = GIFT_EMOJIS[Math.floor(Math.random() * GIFT_EMOJIS.length)];
+        els.giftEmoji.textContent = emoji;
+        els.giftTitle.textContent = seatLabel(seat) + " 全部消完了！";
+        els.giftText.textContent = "恭喜！可以跟老師領小禮物／抽扭蛋。抽到：" + emoji;
+        els.giftOverlay.hidden = false;
+        burstConfetti();
+      }
+
+      function burstConfetti() {
+        els.confetti.hidden = false;
+        els.confetti.innerHTML = "";
+        const colors = ["#3eb7ff", "#ffb14a", "#6fbf7a", "#ff7aa2", "#a78bfa"];
+        for (let i = 0; i < 36; i++) {
+          const bit = document.createElement("i");
+          bit.style.left = Math.random() * 100 + "%";
+          bit.style.background = colors[i % colors.length];
+          bit.style.animationDuration = 1.2 + Math.random() * 1.4 + "s";
+          bit.style.animationDelay = Math.random() * 0.3 + "s";
+          els.confetti.appendChild(bit);
+        }
+        setTimeout(() => {
+          els.confetti.hidden = true;
+          els.confetti.innerHTML = "";
+        }, 2800);
+      }
+
+      function saveSetup() {
+        const n = Math.max(1, Math.min(50, parseInt(els.seatCountInput.value, 10) || 1));
+        const seats = [];
+        for (let i = 1; i <= n; i++) {
+          const inp = els.namesEdit.querySelector('input[data-id="' + i + '"]');
+          seats.push({ id: i, name: inp ? String(inp.value || "").trim() : "" });
+        }
+        const newChars = extractHan(els.charsInput.value);
+        const reviewChars = extractHan(els.reviewCharsInput ? els.reviewCharsInput.value : "");
+        const chars = buildActiveChars(newChars, reviewChars, true);
+        if (!chars.length) {
+          alert("請選擇課次或輸入至少一個生字。");
+          els.charsInput.focus();
+          return;
+        }
+        const lessonId = els.lessonSelect ? els.lessonSelect.value : "";
+        const les = lessonCatalog.find((x) => x.id === lessonId) || null;
+        const oldProgress = state.progress || {};
+        const oldGifts = state.giftsClaimed || {};
+        state.className = "";
+        state.seats = seats;
+        state.lessonId = lessonId || "";
+        state.lessonName = les ? les.name : state.lessonName || "";
+        state.newChars = newChars;
+        state.reviewChars = reviewChars;
+        state.includeReview = true;
+        state.chars = chars;
+        if (state.vocabHintsBySeat && typeof state.vocabHintsBySeat === "object") {
+          const seatIds = new Set(seats.map((s) => String(s.id)));
+          Object.keys(state.vocabHintsBySeat).forEach((sid) => {
+            if (!seatIds.has(String(sid))) {
+              delete state.vocabHintsBySeat[sid];
+              return;
+            }
+            const list = state.vocabHintsBySeat[sid];
+            if (!Array.isArray(list)) {
+              delete state.vocabHintsBySeat[sid];
+              return;
+            }
+            state.vocabHintsBySeat[sid] = list.filter((c) => chars.indexOf(c) >= 0);
+          });
+        }
+        state.showOutline = false;
+        state.showMoe = true;
+        state.progress = {};
+        state.giftsClaimed = {};
+        seats.forEach((s) => {
+          const k = String(s.id);
+          const prevRaw = oldProgress[k];
+          const prevMap = Array.isArray(prevRaw)
+            ? (() => {
+                const m = {};
+                prevRaw.forEach((c) => {
+                  if (c) m[c] = { freehand: 1, outline: false };
+                });
+                return m;
+              })()
+            : prevRaw && typeof prevRaw === "object"
+              ? prevRaw
+              : {};
+          const nextMap = {};
+          Object.keys(prevMap).forEach((c) => {
+            if (chars.includes(c)) nextMap[c] = normalizeCharRecord(prevMap[c]);
+          });
+          state.progress[k] = nextMap;
+          const doneCount = Object.keys(nextMap).filter((c) => isCharPracticed(nextMap[c])).length;
+          if (oldGifts[k] && doneCount === chars.length && chars.length > 0) {
+            state.giftsClaimed[k] = true;
+          }
+        });
+        if (state.activeSeatId != null && !seats.some((s) => s.id === state.activeSeatId)) {
+          state.activeSeatId = null;
+        }
+        ensureSeatProgressKeys();
+        save();
+        closeSetup();
+        renderAll();
+        if (els.offlineHint) {
+          els.offlineHint.hidden = true;
+          els.offlineHint.textContent = "";
+        }
+        prefetchWeekChars(state.chars, null);
+        if (state.activeSeatId == null) openSeatPicker();
+      }
+
+      // events
+      els.setupBtn.addEventListener("click", openSetup);
+      if (els.vocabExamBtn) els.vocabExamBtn.addEventListener("click", openVocabExam);
+      if (els.vocabCloseSetupBtn) els.vocabCloseSetupBtn.addEventListener("click", closeVocabExam);
+      if (els.vocabExitBtn) els.vocabExitBtn.addEventListener("click", closeVocabExam);
+      if (els.vocabSummaryDoneBtn) {
+        els.vocabSummaryDoneBtn.addEventListener("click", dismissVocabExamUI);
+      }
+      if (els.vocabStartBtn) els.vocabStartBtn.addEventListener("click", startVocabExam);
+      if (els.vocabSpeakBtn) {
+        els.vocabSpeakBtn.addEventListener("click", () => {
+          const w = currentVocabWord();
+          if (w) speakVocab(w.speak);
+        });
+      }
+      if (els.vocabSkipBtn) {
+        els.vocabSkipBtn.addEventListener("click", () => {
+          if (!vocabSession) return;
+          closeVocabStrokeHint();
+          if (vocabSession.index >= vocabSession.words.length - 1) {
+            finishVocabExam();
+            return;
+          }
+          vocabSession.index += 1;
+          renderVocabWord();
+          const next = currentVocabWord();
+          if (next) speakVocab(next.speak);
+        });
+      }
+      if (els.vocabLessonSelect) {
+        els.vocabLessonSelect.addEventListener("change", updateVocabLessonHint);
+      }
+      if (els.vocabReloadLessonsBtn) {
+        els.vocabReloadLessonsBtn.addEventListener("click", () => {
+          ensureVocabCatalogs(true)
+            .then(() => fillVocabLessonSelect())
+            .catch((e) => alert((e && e.message) || "重新載入失敗"));
+        });
+      }
+      if (els.vocabStrokeCloseBtn) {
+        els.vocabStrokeCloseBtn.addEventListener("click", closeVocabStrokeHint);
+      }
+      if (els.vocabStrokePlayBtn) {
+        els.vocabStrokePlayBtn.addEventListener("click", () => {
+          if (vocabHintDemo) vocabHintDemo.playOrPause();
+        });
+      }
+      if (els.vocabStrokeNextBtn) {
+        els.vocabStrokeNextBtn.addEventListener("click", () => {
+          if (vocabHintDemo) vocabHintDemo.nextStroke();
+        });
+      }
+      if (els.vocabStrokeReplayBtn) {
+        els.vocabStrokeReplayBtn.addEventListener("click", () => {
+          if (vocabHintDemo) vocabHintDemo.replay();
+        });
+      }
+      if (els.vocabStrokeOverlay) {
+        els.vocabStrokeOverlay.addEventListener("click", (e) => {
+          if (e.target === els.vocabStrokeOverlay) closeVocabStrokeHint();
+        });
+      }
+      initVocabVoiceModeControls();
+      if ("speechSynthesis" in window) {
+        try {
+          window.speechSynthesis.onvoiceschanged = () => {
+            pickVoiceZh();
+            pickVoiceYue();
+          };
+        } catch (_) {}
+      }
+      els.closeSetupBtn.addEventListener("click", closeSetup);
+      els.saveSetupBtn.addEventListener("click", saveSetup);
+      if (els.addClassBtn) els.addClassBtn.addEventListener("click", openAddClassDialog);
+      if (els.newClassCancelBtn) els.newClassCancelBtn.addEventListener("click", closeAddClassDialog);
+      if (els.newClassSaveBtn) els.newClassSaveBtn.addEventListener("click", () => {
+        createClassFromForm().catch((e) => alert((e && e.message) || "建立失敗"));
+      });
+      if (els.exportYearOfflineBtn) {
+        els.exportYearOfflineBtn.addEventListener("click", () => exportOfflinePack({ year: true }));
+      }
+      if (els.reloadLessonsBtn) els.reloadLessonsBtn.addEventListener("click", () => reloadLessons(false));
+      if (els.lessonSelect) {
+        els.lessonSelect.addEventListener("change", () => {
+          const les = lessonCatalog.find((x) => x.id === els.lessonSelect.value);
+          if (les) applyLessonToForm(les);
+        });
+      }
+      els.seatCountInput.addEventListener("change", rebuildNamesEdit);
+
+      els.seatNowBtn.addEventListener("click", openSeatPicker);
+      els.pickSeatBtn.addEventListener("click", openSeatPicker);
+      els.closeSeatBtn.addEventListener("click", closeSeatPicker);
+      els.clearSeatBtn.addEventListener("click", () => {
+        state.activeSeatId = null;
+        save();
+        closeSeatPicker();
+        renderAll();
+      });
+
+      els.clearWriteBtn.addEventListener("click", restartPractice);
+      els.closeWriteBtn.addEventListener("click", closeWrite);
+      els.outlineNowCheck.addEventListener("change", () => {
+        if (els.outlineNowCheck.checked) practiceUsedOutline = true;
+        if (quiz) quiz.setShowOutline(!!els.outlineNowCheck.checked);
+      });
+      els.hintStrokeCheck.addEventListener("change", () => {
+        if (quiz) quiz.refreshHint();
+      });
+      if (els.moePlayBtn) {
+        els.moePlayBtn.addEventListener("click", () => {
+          if (moeDemo) moeDemo.playOrPause();
+        });
+      }
+      if (els.moeNextBtn) {
+        els.moeNextBtn.addEventListener("click", () => {
+          if (moeDemo) moeDemo.nextStroke();
+        });
+      }
+      if (els.moeReplayBtn) {
+        els.moeReplayBtn.addEventListener("click", () => {
+          if (moeDemo) moeDemo.replay();
+        });
+      }
+
+      els.claimGiftBtn.addEventListener("click", () => {
+        els.giftOverlay.hidden = true;
+      });
+
+      [els.setupOverlay, els.seatOverlay, els.writeOverlay, els.giftOverlay, els.vocabExamOverlay, els.addClassOverlay]
+        .filter(Boolean)
+        .forEach((ov) => {
+          ov.addEventListener("click", (e) => {
+            if (e.target === ov) {
+              if (ov === els.writeOverlay) closeWrite();
+              else if (ov === els.seatOverlay) closeSeatPicker();
+              else if (ov === els.setupOverlay) closeSetup();
+              else if (ov === els.vocabExamOverlay) closeVocabExam();
+              else if (ov === els.addClassOverlay) closeAddClassDialog();
+              else if (ov === els.giftOverlay) ov.hidden = true;
+            }
+          });
+        });
+
+      loadClassesMeta();
+      if (OFFLINE_PACK && OFFLINE_PACK.state) {
+        state = Object.assign(defaultState(), OFFLINE_PACK.state);
+        if (!Array.isArray(state.newChars)) state.newChars = state.chars || [];
+        if (!Array.isArray(state.reviewChars)) state.reviewChars = [];
+        state.includeReview = true;
+        state.showOutline = false;
+        state.showMoe = true;
+      } else {
+        load(classesMeta.activeClassId);
+        save();
+      }
+      ensureSeatProgressKeys();
+      renderClassSwitch();
+      renderAll();
+      if (!OFFLINE_PACK) {
+        reloadLessons(true).then(() => {
+          if (!state.chars.length) openSetup();
+        });
+      }
+      if (!state.chars.length) {
+        openSetup();
+      } else if (state.activeSeatId == null) {
+        openSeatPicker();
+      }
+
+      if (!OFFLINE_PACK && "serviceWorker" in navigator) {
+        navigator.serviceWorker.register("./sw.js").catch(() => {});
+      }
+    })();
+  </script>
+</body>
+</html>
