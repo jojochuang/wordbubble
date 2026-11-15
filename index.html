@@ -1575,7 +1575,8 @@
           const r = rows[i] || [];
           const name = String(r[0] || "").trim();
           const neu = extractHan(r[1] || "");
-          const rev = extractHan(r[2] || "");
+          // 複習字＝C＋D 欄
+          const rev = extractHan(String(r[2] || "") + String(r[3] || ""));
           const catalogKey = String(r[8] || "").trim(); // I 欄＝目錄，對應考試表 A 欄
           const vocab = parseVocabList(r[9] || "");
           if (!name && !neu.length && !rev.length && !vocab.length && !catalogKey) continue;
