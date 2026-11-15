@@ -1705,6 +1705,14 @@
         }
       }
 
+      function syncFormFromSelectedLesson() {
+        const id =
+          (els.lessonSelect && els.lessonSelect.value) || state.lessonId || "";
+        if (!id) return;
+        const les = lessonCatalog.find((x) => x.id === id);
+        if (les) applyLessonToForm(les);
+      }
+
       async function reloadLessons(selectCurrent) {
         if (els.lessonHint) {
           els.lessonHint.hidden = false;
@@ -1714,7 +1722,9 @@
           lessonCatalog = await fetchLessonCatalog();
           const prefer = selectCurrent ? state.lessonId : els.lessonSelect && els.lessonSelect.value;
           fillLessonSelect(prefer || "");
-          if (els.lessonHint) {
+          // 重讀試算表後，依課次重帶生字／複習字（C＋D），避免沿用舊的 state
+          syncFormFromSelectedLesson();
+          if (els.lessonHint && !(els.lessonSelect && els.lessonSelect.value)) {
             els.lessonHint.textContent =
               "已載入 " + lessonCatalog.length + " 個課次（約 " +
               countUniqueInCatalog() +
@@ -3023,7 +3033,13 @@
         renderClassSwitch();
         fillSetupForm();
         els.setupOverlay.hidden = false;
-        if (!lessonCatalog.length && !OFFLINE_PACK) reloadLessons(true);
+        if (OFFLINE_PACK) return;
+        if (!lessonCatalog.length) {
+          reloadLessons(true);
+        } else {
+          // 目錄已在記憶體：仍依試算表課次重帶，確保複習字含 C＋D
+          syncFormFromSelectedLesson();
+        }
       }
       function closeSetup() {
         els.setupOverlay.hidden = true;
