@@ -1415,18 +1415,48 @@
         return rows;
       }
 
+      /** 讀取試算表 CSV：本機 /api → Google 直連 → CORS 代理（線上 GitHub 可用） */
+      async function fetchSheetCsvText(sheetId, gid) {
+        const sid = String(sheetId || "").trim();
+        const g = String(gid != null ? gid : "0").trim() || "0";
+        if (!sid) throw new Error("缺少試算表 ID");
+        const direct =
+          "https://docs.google.com/spreadsheets/d/" +
+          encodeURIComponent(sid) +
+          "/export?format=csv&gid=" +
+          encodeURIComponent(g);
+        const candidates = [
+          "/api/sheet_csv?sheet_id=" + encodeURIComponent(sid) + "&gid=" + encodeURIComponent(g),
+          direct,
+          "https://api.allorigins.win/raw?url=" + encodeURIComponent(direct),
+          "https://corsproxy.io/?" + encodeURIComponent(direct),
+        ];
+        let lastErr = null;
+        for (let i = 0; i < candidates.length; i++) {
+          try {
+            const res = await fetch(candidates[i], { cache: "no-store" });
+            if (!res.ok) throw new Error("HTTP " + res.status);
+            const text = await res.text();
+            if (!text || !String(text).trim()) throw new Error("空內容");
+            // Google 權限錯誤頁不是 CSV
+            if (/accounts\.google\.com|Sign in|抱歉|無法存取/i.test(text.slice(0, 400)) && text.indexOf(",") < 0) {
+              throw new Error("試算表未開放（請設「知道連結的任何人可檢視」）");
+            }
+            return text;
+          } catch (e) {
+            lastErr = e;
+          }
+        }
+        throw new Error(
+          "試算表載入失敗" + (lastErr && lastErr.message ? "：" + lastErr.message : "")
+        );
+      }
+
       async function fetchLessonCatalog() {
         const cls = activeClassMeta();
         const sheetId = (cls && cls.lessonSheetId) || LESSON_SHEET_ID;
         const gid = (cls && cls.lessonGid) || LESSON_GID;
-        const url =
-          "/api/sheet_csv?sheet_id=" +
-          encodeURIComponent(sheetId) +
-          "&gid=" +
-          encodeURIComponent(gid);
-        const res = await fetch(url, { cache: "no-store" });
-        if (!res.ok) throw new Error("試算表載入失敗");
-        const csv = await res.text();
+        const csv = await fetchSheetCsvText(sheetId, gid);
         const rows = parseCsv(csv);
         const out = [];
         for (let i = 1; i < rows.length; i++) {
@@ -1454,14 +1484,7 @@
         const sheetId = cls && cls.examSheetId;
         if (!sheetId) return [];
         const gid = (cls && cls.examGid) || "0";
-        const url =
-          "/api/sheet_csv?sheet_id=" +
-          encodeURIComponent(sheetId) +
-          "&gid=" +
-          encodeURIComponent(gid);
-        const res = await fetch(url, { cache: "no-store" });
-        if (!res.ok) throw new Error("考試試算表載入失敗");
-        const csv = await res.text();
+        const csv = await fetchSheetCsvText(sheetId, gid);
         const rows = parseCsv(csv);
         const out = [];
         const start = rows.length && String(rows[0][0] || "").trim() === "目錄" ? 1 : 0;
@@ -1535,7 +1558,10 @@
       }
 
       async function reloadLessons(selectCurrent) {
-        if (els.lessonHint) els.lessonHint.textContent = "正在載入課次試算表…";
+        if (els.lessonHint) {
+          els.lessonHint.hidden = false;
+          els.lessonHint.textContent = "正在載入課次試算表…";
+        }
         try {
           lessonCatalog = await fetchLessonCatalog();
           const prefer = selectCurrent ? state.lessonId : els.lessonSelect && els.lessonSelect.value;
@@ -1544,11 +1570,12 @@
             els.lessonHint.textContent =
               "已載入 " + lessonCatalog.length + " 個課次（約 " +
               countUniqueInCatalog() +
-              " 個不重複字）。選課次即可帶入生字／複習字。";
+              " 個不重複字）。";
           }
         } catch (e) {
           fillLessonSelect("");
           if (els.lessonHint) {
+            els.lessonHint.hidden = false;
             els.lessonHint.textContent =
               "課次載入失敗：" + (e && e.message ? e.message : e) + "。仍可手動輸入生字。";
           }
