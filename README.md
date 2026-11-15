@@ -2,7 +2,7 @@
 
 依筆順寫對就消泡泡；支援語詞聽寫、多班級試算表（網址只存本機）。
 
-線上（GitHub Pages）已內建美洲一冊約 **228 字**筆順（`pack-data.js`），學生在家直接開網頁即可練習動畫，**不必再下載離線包**。
+線上（GitHub Pages）已內建美洲一冊約 **228 字**（`pack-data.js`）與美洲二冊約 **294 字**（`pack-data-book2.js`）筆順，學生在家直接開網頁即可練習動畫，**不必再下載離線包**。
 
 課次／考試表用 Google Sheets gviz（JSONP）讀取；本機有 `server.py` 時仍優先走 `/api/sheet_csv`。
 
@@ -25,9 +25,11 @@ python3 server.py
 | 檔案 | 說明 |
 |------|------|
 | `index.html` | 生字泡泡主頁 |
-| `pack-data.js` | 內建筆順包（約 228 字） |
+| `pack-data.js` | 美洲一冊筆順包（約 228 字） |
+| `pack-data-book2.js` | 美洲二冊筆順包（約 294 字，B2–D37） |
 | `server.py` | 本機 API（選用） |
 | `sw.js` | Service Worker |
+
 ## 更新筆順包
 
-在有本機 `svg/` 的環境匯出離線包後，把裡面的 `charData` 再匯出成 `pack-data.js`（`window.__BUBBLE_PACK__`）。
+在有本機 `svg/` 的環境：一冊匯出成 `pack-data.js`（`window.__BUBBLE_PACK__`）；二冊可用 `tools/build_pack_book2.py` 產生 `pack-data-book2.js`（`window.__BUBBLE_PACK_BOOK2__`）。

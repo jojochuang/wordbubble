@@ -1070,27 +1070,33 @@
   <div class="confetti" id="confetti" hidden></div>
 
   <script src="./pack-data.js"></script>
+  <script src="./pack-data-book2.js"></script>
   <script>
     (function () {
       const STORAGE_KEY = "char_bubble_board_v2";
       const CLASSES_META_KEY = "char_bubble_classes_v1";
       const DEFAULT_CLASS_ID = "america1";
+      const BOOK2_CLASS_ID = "america2";
       const CHAR_DATA_DB = "char_bubble_svg_v3";
       const SVG_VIEW = 540;
       const MOE_COORD = 2048;
       const LESSON_SHEET_ID = "1MxROi0vIZ2Dk1doq3jJWlP28_t2R7j7q8N4h1YCs8Qc";
       const LESSON_GID = "1085808977";
+      const LESSON_GID_BOOK2 = "1601198504";
       // 與聽寫語詞考試同一試算表（A＝目錄，B～K＝題）
       const EXAM_SHEET_ID = "1PWGAxP2QEcfb3Aj3m7S-SWVqrxpI3Y3ywhkXcaxv9Ko";
       const EXAM_GID = "1975515821";
       const SPEAK_LANG_KEY = "dictation_exam_speak_lang";
       const GIFT_EMOJIS = ["🎁", "🌟", "🦄", "🍭", "🎈", "🦊", "🌈", "🏆"];
-      // 完整離線單檔（舊流程）或 GitHub 內建 pack-data.js
+      // 完整離線單檔（舊流程）或 GitHub 內建 pack-data.js / pack-data-book2.js
       const OFFLINE_PACK = window.__BUBBLE_OFFLINE__ || null;
       const BUBBLE_PACK = window.__BUBBLE_PACK__ || null;
+      const BUBBLE_PACK_BOOK2 = window.__BUBBLE_PACK_BOOK2__ || null;
+      const HAS_EMBEDDED_PACK = !!(OFFLINE_PACK || BUBBLE_PACK || BUBBLE_PACK_BOOK2);
       const charDataMemory = Object.assign(
         {},
         (BUBBLE_PACK && BUBBLE_PACK.charData) || {},
+        (BUBBLE_PACK_BOOK2 && BUBBLE_PACK_BOOK2.charData) || {},
         (OFFLINE_PACK && OFFLINE_PACK.charData) || {}
       );
 
@@ -1233,10 +1239,24 @@
         };
       }
 
+      function builtinAmerica2Class() {
+        return {
+          id: BOOK2_CLASS_ID,
+          name: "美洲二冊",
+          builtin: true,
+          lessonSheetId: LESSON_SHEET_ID,
+          lessonGid: LESSON_GID_BOOK2,
+          examSheetId: EXAM_SHEET_ID,
+          examGid: EXAM_GID,
+          lessonUrl: "",
+          examUrl: "",
+        };
+      }
+
       function defaultClassesMeta() {
         return {
           activeClassId: DEFAULT_CLASS_ID,
-          classes: [builtinAmericaClass()],
+          classes: [builtinAmericaClass(), builtinAmerica2Class()],
         };
       }
 
@@ -1291,6 +1311,22 @@
                 builtin: true,
                 lessonSheetId: LESSON_SHEET_ID,
                 lessonGid: LESSON_GID,
+                examSheetId: EXAM_SHEET_ID,
+                examGid: EXAM_GID,
+              });
+            });
+          }
+          if (!list.some((c) => c && c.id === BOOK2_CLASS_ID)) {
+            const a1 = list.findIndex((c) => c && c.id === DEFAULT_CLASS_ID);
+            list.splice(a1 >= 0 ? a1 + 1 : 0, 0, builtinAmerica2Class());
+          } else {
+            list = list.map((c) => {
+              if (!c || c.id !== BOOK2_CLASS_ID) return c;
+              return Object.assign({}, builtinAmerica2Class(), c, {
+                name: "美洲二冊",
+                builtin: true,
+                lessonSheetId: LESSON_SHEET_ID,
+                lessonGid: LESSON_GID_BOOK2,
                 examSheetId: EXAM_SHEET_ID,
                 examGid: EXAM_GID,
               });
@@ -2044,7 +2080,7 @@
         const wantMoe = !opts || opts.moe !== false;
         if (charDataMemory[ch] && Array.isArray(charDataMemory[ch].strokes)) {
           const cached = charDataMemory[ch];
-          if (wantMoe && !cached.medians && !OFFLINE_PACK && !BUBBLE_PACK) {
+          if (wantMoe && !cached.medians && !HAS_EMBEDDED_PACK) {
             // 背景補教育部方向，不擋回傳
             enrichMediansInBackground(ch, cached);
           }
@@ -2053,7 +2089,7 @@
         const fromIdb = await idbGetChar(ch);
         if (fromIdb && Array.isArray(fromIdb.strokes) && fromIdb.strokes.length) {
           charDataMemory[ch] = fromIdb;
-          if (wantMoe && !fromIdb.medians && !OFFLINE_PACK && !BUBBLE_PACK) {
+          if (wantMoe && !fromIdb.medians && !HAS_EMBEDDED_PACK) {
             enrichMediansInBackground(ch, fromIdb);
           }
           return fromIdb;
@@ -2065,7 +2101,7 @@
         const data = { strokes: strokes, medians: medians, source: source };
         charDataMemory[ch] = data;
         idbSetChar(ch, data);
-        if (wantMoe && !OFFLINE_PACK && !BUBBLE_PACK) enrichMediansInBackground(ch, data);
+        if (wantMoe && !HAS_EMBEDDED_PACK) enrichMediansInBackground(ch, data);
         return data;
       }
 

@@ -1,9 +1,10 @@
 /* 生字泡泡：快取主頁與內建筆順包 */
-const CACHE = "wordbubble-v3-pack";
+const CACHE = "wordbubble-v4-book2";
 const PRECACHE = [
   "./index.html",
   "./sw.js",
   "./pack-data.js",
+  "./pack-data-book2.js",
   "./char_bubble.webmanifest",
 ];
 
@@ -33,6 +34,7 @@ self.addEventListener("fetch", (event) => {
     path.endsWith("/") ||
     path.endsWith("/sw.js") ||
     path.endsWith("/pack-data.js") ||
+    path.endsWith("/pack-data-book2.js") ||
     path.endsWith("/char_bubble.webmanifest") ||
     path.includes("/svg/");
 
