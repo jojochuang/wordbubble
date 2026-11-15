@@ -92,6 +92,22 @@
       display: inline-block;
       box-sizing: border-box;
     }
+    .offline-pack-row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: flex-start;
+      gap: 10px 14px;
+      margin-top: 10px;
+    }
+    .offline-pack-note {
+      flex: 1;
+      min-width: min(220px, 100%);
+      margin: 0;
+      color: #c62828;
+      font-weight: 800;
+      font-size: 0.92rem;
+      line-height: 1.45;
+    }
     .pill {
       border: none;
       border-radius: 999px;
@@ -880,8 +896,9 @@
         <button type="button" class="pill ghost" id="exportYearOfflineBtn">匯出全年離線包</button>
         <button type="button" class="pill ghost" id="closeSetupBtn">關閉</button>
       </div>
-      <div class="row-btns" style="margin-top:4px;">
+      <div class="offline-pack-row" id="offlinePackRow">
         <a class="pill primary" id="downloadOfflinePackBtn" href="./生字泡泡-離線一冊生字.html" download="生字泡泡-離線一冊生字.html">下載筆順離線包</a>
+        <p class="offline-pack-note" id="offlinePackNote">第一次使用必須先下載。下載後請到「檔案 → 最近項目」點開該 HTML（可能不在「下載項目」裡），用 Safari 開啟即可離線寫字；這不會自動套進網頁版。</p>
       </div>
       <p class="hint" id="offlineHint" hidden></p>
     </div>
@@ -4044,8 +4061,8 @@
         state.includeReview = true;
         state.showOutline = false;
         state.showMoe = true;
-        const dl = document.getElementById("downloadOfflinePackBtn");
-        if (dl) dl.hidden = true;
+        const packRow = document.getElementById("offlinePackRow");
+        if (packRow) packRow.hidden = true;
       } else {
         load(classesMeta.activeClassId);
         save();
