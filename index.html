@@ -391,15 +391,42 @@
       margin-bottom: 12px;
     }
     .names-edit .mini {
+      position: relative;
       display: flex;
       align-items: center;
       gap: 6px;
       background: #fff;
       border: 1px solid var(--line);
       border-radius: 12px;
-      padding: 6px 8px;
+      padding: 10px 8px 6px;
     }
-    .names-edit .mini span {
+    .names-edit .seat-del {
+      position: absolute;
+      top: -6px;
+      left: -6px;
+      width: 22px;
+      height: 22px;
+      border: 1.5px solid var(--line);
+      border-radius: 50%;
+      background: #fff;
+      color: #c0392b;
+      font-size: 14px;
+      font-weight: 900;
+      line-height: 1;
+      padding: 0;
+      cursor: pointer;
+      display: grid;
+      place-items: center;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+      z-index: 1;
+    }
+    .names-edit .seat-del:hover,
+    .names-edit .seat-del:focus-visible {
+      background: #c0392b;
+      border-color: #c0392b;
+      color: #fff;
+    }
+    .names-edit .mini span.seat-no {
       font-size: 0.8rem;
       color: var(--muted);
       width: 2.2em;
@@ -3509,6 +3536,69 @@
         return rec;
       }
 
+      function readSeatsFromNamesEdit() {
+        const n = Math.max(1, Math.min(50, parseInt(els.seatCountInput.value, 10) || 1));
+        const seats = [];
+        for (let i = 1; i <= n; i++) {
+          const inp = els.namesEdit.querySelector('input[data-id="' + i + '"]');
+          const handSel = els.namesEdit.querySelector('select[data-hand-id="' + i + '"]');
+          const prev = state.seats.find((s) => s.id === i);
+          seats.push({
+            id: i,
+            name: inp ? String(inp.value || "").trim() : (prev && prev.name) || "",
+            hand: normalizeHand(handSel ? handSel.value : prev && prev.hand),
+          });
+        }
+        return seats;
+      }
+
+      function remapSeatKeyedObject(obj, idMap) {
+        if (!obj || typeof obj !== "object") return {};
+        const next = {};
+        Object.keys(obj).forEach((oldId) => {
+          const newId = idMap[String(oldId)];
+          if (newId == null) return;
+          next[String(newId)] = obj[oldId];
+        });
+        return next;
+      }
+
+      function removeSeatFromSetup(seatId) {
+        const id = Number(seatId);
+        const seats = readSeatsFromNamesEdit();
+        if (seats.length <= 1) {
+          alert("至少保留一位學生。");
+          return;
+        }
+        const target = seats.find((s) => s.id === id);
+        const label = target
+          ? (target.name ? target.name + "（" + target.id + "號）" : target.id + "號")
+          : id + "號";
+        if (!confirm("確定刪掉此學生？\n\n" + label + "\n\n其泡泡進度也會一併移除。")) {
+          return;
+        }
+        const kept = seats.filter((s) => s.id !== id);
+        const idMap = {};
+        const renumbered = kept.map((s, idx) => {
+          const newId = idx + 1;
+          idMap[String(s.id)] = newId;
+          return { id: newId, name: s.name || "", hand: normalizeHand(s.hand) };
+        });
+        state.seats = renumbered;
+        state.progress = remapSeatKeyedObject(state.progress, idMap);
+        state.giftsClaimed = remapSeatKeyedObject(state.giftsClaimed, idMap);
+        state.vocabHintsBySeat = remapSeatKeyedObject(state.vocabHintsBySeat, idMap);
+        state.vocabResumeBySeat = remapSeatKeyedObject(state.vocabResumeBySeat, idMap);
+        if (state.activeSeatId != null) {
+          const mapped = idMap[String(state.activeSeatId)];
+          state.activeSeatId = mapped != null ? mapped : null;
+        }
+        els.seatCountInput.value = String(renumbered.length);
+        rebuildNamesEdit();
+        save();
+        renderAll();
+      }
+
       function rebuildNamesEdit() {
         const n = Math.max(1, Math.min(50, parseInt(els.seatCountInput.value, 10) || 1));
         const prevName = {};
@@ -3529,7 +3619,20 @@
         for (let i = 1; i <= n; i++) {
           const wrap = document.createElement("div");
           wrap.className = "mini";
+          const delBtn = document.createElement("button");
+          delBtn.type = "button";
+          delBtn.className = "seat-del";
+          delBtn.setAttribute("data-del-id", String(i));
+          delBtn.setAttribute("aria-label", "刪除 " + i + "號");
+          delBtn.title = "刪除此學生";
+          delBtn.textContent = "×";
+          delBtn.addEventListener("click", (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            removeSeatFromSetup(i);
+          });
           const label = document.createElement("span");
+          label.className = "seat-no";
           label.textContent = i + "號";
           const input = document.createElement("input");
           input.type = "text";
@@ -3543,6 +3646,7 @@
           handSel.innerHTML =
             '<option value="right">右撇</option><option value="left">左撇</option>';
           handSel.value = normalizeHand(prevHand[String(i)]);
+          wrap.appendChild(delBtn);
           wrap.appendChild(label);
           wrap.appendChild(input);
           wrap.appendChild(handSel);
@@ -4555,17 +4659,11 @@
         }
         const n = Math.max(1, Math.min(50, parseInt(els.seatCountInput.value, 10) || 1));
         const seats = [];
-        for (let i = 1; i <= n; i++) {
-          const inp = els.namesEdit.querySelector('input[data-id="' + i + '"]');
-          const handSel = els.namesEdit.querySelector('select[data-hand-id="' + i + '"]');
-          const prev = state.seats.find((s) => s.id === i);
-          seats.push({
-            id: i,
-            name: inp ? String(inp.value || "").trim() : "",
-            hand: normalizeHand(
-              handSel ? handSel.value : prev && prev.hand
-            ),
-          });
+        const fromForm = readSeatsFromNamesEdit();
+        fromForm.forEach((s) => seats.push(s));
+        // keep n in sync if form shorter (e.g. after deletes)
+        while (seats.length < n) {
+          seats.push({ id: seats.length + 1, name: "", hand: "right" });
         }
         const newChars = extractHan(els.charsInput.value);
         const reviewChars = extractHan(els.reviewCharsInput ? els.reviewCharsInput.value : "");

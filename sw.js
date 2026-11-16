@@ -1,5 +1,5 @@
 /* 生字泡泡：快取主頁與內建筆順包 */
-const CACHE = "wordbubble-v13-handedness";
+const CACHE = "wordbubble-v14-seat-delete";
 const PRECACHE = [
   "./index.html",
   "./sw.js",
