@@ -983,7 +983,7 @@
     <div class="sheet" role="dialog" aria-labelledby="vocabExamTitle" style="width:min(640px,100%);">
       <h2 class="display" id="vocabExamTitle">語詞聽寫</h2>
       <div id="vocabSetupPanel" class="vocab-setup">
-        <p class="hint">與「聽寫語詞考試」同一試算表。生字表 I 欄「目錄」對應考試表 A 欄（如 2週）。一次一詞；幾字幾格，可先寫任一字。底圖／提示預設關閉。</p>
+        <p class="hint">與考試試算表同一套「目錄／N週」。選好生字課次後開聽寫會自動對到該週；也可手動改。一次一詞；幾字幾格，可先寫任一字。底圖／提示預設關閉。</p>
         <div class="field">
           <label for="vocabLessonSelect">目錄／週次（考試試算表）</label>
           <div class="lesson-row">
@@ -1760,25 +1760,75 @@
         );
       }
 
+      function sheetHeaderIndex(headerRow, ...names) {
+        const cells = (headerRow || []).map((h) => String(h || "").trim());
+        for (let n = 0; n < names.length; n++) {
+          const want = names[n];
+          const i = cells.findIndex((h) => h === want);
+          if (i >= 0) return i;
+        }
+        return -1;
+      }
+
+      function cellAt(row, idx) {
+        if (idx < 0) return "";
+        return String((row && row[idx]) || "").trim();
+      }
+
+      /** 補齊缺漏的「N週」目錄（例如二冊第一課1 的目錄空白、下一列卻是 2週） */
+      function fillMissingWeekCatalogKeys(lessons) {
+        const weekOf = (k) => {
+          const m = String(k || "").trim().match(/^(\d+)\s*週$/);
+          return m ? parseInt(m[1], 10) : null;
+        };
+        for (let i = 0; i < lessons.length; i++) {
+          if (weekOf(lessons[i].catalogKey) != null) continue;
+          let inferred = null;
+          for (let j = i + 1; j < lessons.length; j++) {
+            const w = weekOf(lessons[j].catalogKey);
+            if (w == null) continue;
+            const gap = j - i;
+            if (w > gap) inferred = w - gap + "週";
+            break;
+          }
+          if (!inferred) {
+            for (let j = i - 1; j >= 0; j--) {
+              const w = weekOf(lessons[j].catalogKey);
+              if (w == null) continue;
+              inferred = w + (i - j) + "週";
+              break;
+            }
+          }
+          if (inferred) lessons[i].catalogKey = inferred;
+        }
+        return lessons;
+      }
+
       async function fetchLessonCatalog() {
         const cls = activeClassMeta();
         const sheetId = (cls && cls.lessonSheetId) || LESSON_SHEET_ID;
         const gid = (cls && cls.lessonGid) || LESSON_GID;
         const rows = await fetchSheetRows(sheetId, gid);
         const out = [];
+        const header = rows[0] || [];
         const start =
           rows.length &&
-          /課次|單元|目錄|生字/.test(String((rows[0] && rows[0][0]) || "").trim())
+          /課次|單元|目錄|生字/.test(String((header[0] || "")).trim())
             ? 1
             : 0;
+        const idxCatalog = sheetHeaderIndex(header, "目錄");
+        const idxVocab = sheetHeaderIndex(header, "週考 語詞", "小學生常用語詞");
+        // 後備：舊版固定欄（一冊 I＝目錄、J＝語詞）
+        const catalogCol = idxCatalog >= 0 ? idxCatalog : 8;
+        const vocabCol = idxVocab >= 0 ? idxVocab : 9;
         for (let i = start; i < rows.length; i++) {
           const r = rows[i] || [];
           const name = String(r[0] || "").trim();
           const neu = extractHan(r[1] || "");
           // 複習字＝C＋D 欄
           const rev = extractHan(String(r[2] || "") + String(r[3] || ""));
-          const catalogKey = String(r[8] || "").trim(); // I 欄＝目錄，對應考試表 A 欄
-          const vocab = parseVocabList(r[9] || "");
+          const catalogKey = cellAt(r, catalogCol);
+          const vocab = parseVocabList(cellAt(r, vocabCol));
           if (!name && !neu.length && !rev.length && !vocab.length && !catalogKey) continue;
           out.push({
             id: String(i),
@@ -1789,7 +1839,7 @@
             vocab: vocab,
           });
         }
-        return out;
+        return fillMissingWeekCatalogKeys(out);
       }
 
       async function fetchExamCatalog() {
@@ -4153,12 +4203,16 @@
       }
 
       function preferredExamLabel() {
-        if (state.lessonId) {
-          const les = lessonCatalog.find((x) => x.id === state.lessonId);
-          if (les && les.catalogKey) {
-            const hit = examCatalog.find((e) => e.label === les.catalogKey);
-            if (hit) return hit.label;
-          }
+        // 設定裡目前選的課次優先（不必先按儲存）；否則用已儲存的 lessonId
+        const lessonId =
+          (els.lessonSelect && els.lessonSelect.value) || state.lessonId || "";
+        if (!lessonId) return "";
+        const les = lessonCatalog.find((x) => x.id === lessonId);
+        if (!les) return "";
+        const key = String(les.catalogKey || "").trim();
+        if (key) {
+          const hit = examCatalog.find((e) => e.label === key);
+          if (hit) return hit.label;
         }
         return "";
       }
@@ -4204,7 +4258,7 @@
         const ex = examCatalog.find((x) => x.label === label);
         if (!ex) {
           els.vocabLessonHint.textContent =
-            "選目錄後會載入該週考試語詞（生字表 I 欄＝考試表 A 欄）。";
+            "選目錄後會載入該週考試語詞。若已在設定選好課次，會依生字表「目錄」自動對到考試週次。";
           return;
         }
         const matched = lessonsForCatalogKey(ex.label);
