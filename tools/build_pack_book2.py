@@ -136,27 +136,194 @@ def scale_medians(raw, stroke_count, coord_max):
     return out
 
 
-def load_medians_local(ch, stroke_count):
-    mj = SVG_ROOT / ch / "medians.json"
-    if mj.is_file():
-        try:
-            j = json.loads(mj.read_text(encoding="utf-8"))
-            vb = j.get("viewBox")
-            coord = vb[2] if isinstance(vb, list) and len(vb) >= 3 else SVG_VIEW
-            m = scale_medians(j.get("medians"), stroke_count, coord)
-            if m:
-                return m, "local-svg+jpg-median"
-        except Exception:
-            pass
+def load_moe_cache(ch, stroke_count):
     cache = MOE_CACHE / f"{format(ord(ch), 'x')}.json"
-    if cache.is_file():
-        try:
-            j = json.loads(cache.read_text(encoding="utf-8"))
-            m = scale_medians(j.get("medians"), stroke_count, j.get("coordMax") or MOE_COORD)
-            if m:
-                return m, "local-svg+moe-track"
-        except Exception:
-            pass
+    if not cache.is_file():
+        return None
+    try:
+        j = json.loads(cache.read_text(encoding="utf-8"))
+        return scale_medians(j.get("medians"), stroke_count, j.get("coordMax") or MOE_COORD)
+    except Exception:
+        return None
+
+
+def load_jpg_medians(ch, stroke_count):
+    """JPG 描線 median 常與本機 svg 筆畫對不齊，僅作最後備援。"""
+    mj = SVG_ROOT / ch / "medians.json"
+    if not mj.is_file():
+        return None
+    try:
+        j = json.loads(mj.read_text(encoding="utf-8"))
+        vb = j.get("viewBox")
+        coord = vb[2] if isinstance(vb, list) and len(vb) >= 3 else SVG_VIEW
+        return scale_medians(j.get("medians"), stroke_count, coord)
+    except Exception:
+        return None
+
+
+def approx_median_from_path(d, n=28):
+    """粗略沿 path 取中線（M/L/Q/C），供無教育部 Track 時判題。"""
+    tokens = re.findall(
+        r"[MmLlHhVvCcQqTtSsAaZz]|[-+]?(?:\d*\.\d+|\d+)(?:[eE][-+]?\d+)?", d or ""
+    )
+    if not tokens:
+        return []
+    pts = []
+    i = 0
+    cx = cy = 0.0
+    start_x = start_y = 0.0
+    cmd = "M"
+
+    def num():
+        nonlocal i
+        v = float(tokens[i])
+        i += 1
+        return v
+
+    def add_line(x0, y0, x1, y1, steps=8):
+        for s in range(steps + 1):
+            t = s / steps
+            pts.append((x0 + (x1 - x0) * t, y0 + (y1 - y0) * t))
+
+    def add_quad(x0, y0, x1, y1, x2, y2, steps=12):
+        for s in range(steps + 1):
+            t = s / steps
+            u = 1 - t
+            pts.append(
+                (
+                    u * u * x0 + 2 * u * t * x1 + t * t * x2,
+                    u * u * y0 + 2 * u * t * y1 + t * t * y2,
+                )
+            )
+
+    def add_cubic(x0, y0, x1, y1, x2, y2, x3, y3, steps=14):
+        for s in range(steps + 1):
+            t = s / steps
+            u = 1 - t
+            pts.append(
+                (
+                    u * u * u * x0
+                    + 3 * u * u * t * x1
+                    + 3 * u * t * t * x2
+                    + t * t * t * x3,
+                    u * u * u * y0
+                    + 3 * u * u * t * y1
+                    + 3 * u * t * t * y2
+                    + t * t * t * y3,
+                )
+            )
+
+    while i < len(tokens):
+        t = tokens[i]
+        if re.match(r"^[A-Za-z]$", t):
+            cmd = t
+            i += 1
+            if cmd in "Zz":
+                add_line(cx, cy, start_x, start_y, 4)
+                cx, cy = start_x, start_y
+            continue
+        if cmd in "Mm":
+            x, y = num(), num()
+            if cmd == "m":
+                x += cx
+                y += cy
+            cx, cy = x, y
+            start_x, start_y = x, y
+            pts.append((cx, cy))
+            cmd = "L" if cmd == "M" else "l"
+        elif cmd in "Ll":
+            x, y = num(), num()
+            if cmd == "l":
+                x += cx
+                y += cy
+            add_line(cx, cy, x, y)
+            cx, cy = x, y
+        elif cmd in "Hh":
+            x = num()
+            if cmd == "h":
+                x += cx
+            add_line(cx, cy, x, cy)
+            cx = x
+        elif cmd in "Vv":
+            y = num()
+            if cmd == "v":
+                y += cy
+            add_line(cx, cy, cx, y)
+            cy = y
+        elif cmd in "Qq":
+            x1, y1, x, y = num(), num(), num(), num()
+            if cmd == "q":
+                x1 += cx
+                y1 += cy
+                x += cx
+                y += cy
+            add_quad(cx, cy, x1, y1, x, y)
+            cx, cy = x, y
+        elif cmd in "Cc":
+            x1, y1, x2, y2, x, y = num(), num(), num(), num(), num(), num()
+            if cmd == "c":
+                x1 += cx
+                y1 += cy
+                x2 += cx
+                y2 += cy
+                x += cx
+                y += cy
+            add_cubic(cx, cy, x1, y1, x2, y2, x, y)
+            cx, cy = x, y
+        elif cmd in "Ss":
+            x2, y2, x, y = num(), num(), num(), num()
+            if cmd == "s":
+                x2 += cx
+                y2 += cy
+                x += cx
+                y += cy
+            add_cubic(cx, cy, cx, cy, x2, y2, x, y)
+            cx, cy = x, y
+        elif cmd in "Tt":
+            x, y = num(), num()
+            if cmd == "t":
+                x += cx
+                y += cy
+            add_quad(cx, cy, cx, cy, x, y)
+            cx, cy = x, y
+        else:
+            # 略過未知／弧線參數
+            i += 1
+
+    if len(pts) < 2:
+        return []
+    # 去重過密點後等距取 n 點
+    thin = [pts[0]]
+    for p in pts[1:]:
+        if (p[0] - thin[-1][0]) ** 2 + (p[1] - thin[-1][1]) ** 2 >= 4:
+            thin.append(p)
+    if len(thin) < 2:
+        thin = pts
+    # 半長中線近似（同前端 approxMedian 精神：取前半與後半對應點平均）
+    half = max(1, len(thin) // 2)
+    out = []
+    count = max(8, n)
+    for k in range(count):
+        t = k / (count - 1)
+        i0 = min(half - 1, int(t * (half - 1)))
+        i1 = min(len(thin) - 1, half + i0)
+        a, b = thin[i0], thin[i1]
+        out.append({"x": (a[0] + b[0]) / 2, "y": (a[1] + b[1]) / 2})
+    return out
+
+
+def approx_medians_from_strokes(strokes):
+    med = [approx_median_from_path(d) for d in strokes]
+    if any(len(m) < 2 for m in med):
+        return None
+    return med
+
+
+def load_medians_local(ch, stroke_count):
+    # 優先教育部 Track（與一冊 pack 相同）；jpg median 常錯位導致左手寫永遠判錯
+    m = load_moe_cache(ch, stroke_count)
+    if m:
+        return m, "local-svg+moe-track"
     return None, None
 
 
@@ -253,7 +420,17 @@ def main():
                 log("moe", done, "/", len(need_moe))
 
     no_med = [ch for ch, rec in char_data.items() if not rec.get("medians")]
-    log("ok", len(char_data), "no_med", len(no_med), "".join(no_med))
+    for ch in no_med:
+        approx = approx_medians_from_strokes(char_data[ch]["strokes"])
+        if approx:
+            char_data[ch]["medians"] = approx
+            char_data[ch]["source"] = "local-svg+path-approx"
+    still = [ch for ch, rec in char_data.items() if not rec.get("medians")]
+    src_counts = {}
+    for rec in char_data.values():
+        s = rec.get("source") or "?"
+        src_counts[s] = src_counts.get(s, 0) + 1
+    log("ok", len(char_data), "sources", src_counts, "still_no_med", still)
 
     pack = {
         "charData": char_data,

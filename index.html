@@ -1100,12 +1100,33 @@
       const BUBBLE_PACK = window.__BUBBLE_PACK__ || null;
       const BUBBLE_PACK_BOOK2 = window.__BUBBLE_PACK_BOOK2__ || null;
       const HAS_EMBEDDED_PACK = !!(OFFLINE_PACK || BUBBLE_PACK || BUBBLE_PACK_BOOK2);
-      const charDataMemory = Object.assign(
-        {},
-        (BUBBLE_PACK && BUBBLE_PACK.charData) || {},
-        (BUBBLE_PACK_BOOK2 && BUBBLE_PACK_BOOK2.charData) || {},
-        (OFFLINE_PACK && OFFLINE_PACK.charData) || {}
-      );
+      function medianSourceRank(rec) {
+        const s = (rec && rec.source) || "";
+        if (s.indexOf("moe-track") >= 0) return 3;
+        if (s.indexOf("path-approx") >= 0) return 2;
+        if (s.indexOf("jpg-median") >= 0) return 0; // 常與本機 svg 錯位，勿覆蓋好的 Track
+        if (rec && rec.medians && rec.medians.length) return 1;
+        return 0;
+      }
+      function mergePackCharData() {
+        const out = {};
+        const layers = [
+          (BUBBLE_PACK && BUBBLE_PACK.charData) || {},
+          (BUBBLE_PACK_BOOK2 && BUBBLE_PACK_BOOK2.charData) || {},
+          (OFFLINE_PACK && OFFLINE_PACK.charData) || {},
+        ];
+        layers.forEach((layer) => {
+          Object.keys(layer).forEach((ch) => {
+            const next = layer[ch];
+            const prev = out[ch];
+            if (!prev || medianSourceRank(next) >= medianSourceRank(prev)) {
+              out[ch] = next;
+            }
+          });
+        });
+        return out;
+      }
+      const charDataMemory = mergePackCharData();
 
       const els = {
         classSub: document.getElementById("classSub"),

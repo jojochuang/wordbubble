@@ -1,5 +1,5 @@
 /* 生字泡泡：快取主頁與內建筆順包 */
-const CACHE = "wordbubble-v6-exam-book2";
+const CACHE = "wordbubble-v7-book2-medians";
 const PRECACHE = [
   "./index.html",
   "./sw.js",
