@@ -1,5 +1,5 @@
 /* 生字泡泡：快取主頁與內建筆順包 */
-const CACHE = "wordbubble-v9-progress-sync";
+const CACHE = "wordbubble-v10-progress-merge";
 const PRECACHE = [
   "./index.html",
   "./sw.js",

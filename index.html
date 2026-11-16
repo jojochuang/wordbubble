@@ -905,7 +905,7 @@
         <button type="button" class="pill ghost" id="closeSetupBtn">關閉</button>
       </div>
       <input type="file" id="importProgressFile" accept="application/json,.json" hidden />
-      <p class="hint" style="margin:10px 0 0;">兩台 iPad 進度各自存在本機 Safari。要一致：在 A 機「匯出進度備份」→ AirDrop／檔案傳到 B 機 → B 機「匯入進度備份」。</p>
+      <p class="hint" style="margin:10px 0 0;">兩台 iPad 進度各自存在本機。對齊方式：A 匯出 → 傳到 B 匯入（會<strong>合併</strong>兩邊進度，取較高成果，不會抹掉本機已練過的字）。B 若也有新進度，再匯出傳回 A 匯入一次即可兩邊對齊。</p>
       <p class="hint" id="offlineHint" hidden></p>
     </div>
   </div>
@@ -2306,14 +2306,231 @@
         }
       }
 
+      function normalizeProgressRec(rec) {
+        if (rec === true || rec === 1) return { freehand: 1, outline: false };
+        if (!rec || typeof rec !== "object") return { freehand: 0, outline: false };
+        return {
+          freehand: Math.max(0, Math.min(2, Number(rec.freehand) || 0)),
+          outline: !!rec.outline,
+        };
+      }
+
+      function mergeProgressMaps(a, b) {
+        const out = {};
+        const keys = new Set([
+          ...Object.keys(a && typeof a === "object" ? a : {}),
+          ...Object.keys(b && typeof b === "object" ? b : {}),
+        ]);
+        keys.forEach((seatId) => {
+          const left = a && a[seatId];
+          const right = b && b[seatId];
+          // 舊格式：字陣列
+          const leftMap =
+            Array.isArray(left)
+              ? left.reduce((m, ch) => {
+                  if (ch) m[ch] = { freehand: 1, outline: false };
+                  return m;
+                }, {})
+              : left && typeof left === "object"
+                ? left
+                : {};
+          const rightMap =
+            Array.isArray(right)
+              ? right.reduce((m, ch) => {
+                  if (ch) m[ch] = { freehand: 1, outline: false };
+                  return m;
+                }, {})
+              : right && typeof right === "object"
+                ? right
+                : {};
+          const charKeys = new Set([...Object.keys(leftMap), ...Object.keys(rightMap)]);
+          const merged = {};
+          charKeys.forEach((ch) => {
+            const L = normalizeProgressRec(leftMap[ch]);
+            const R = normalizeProgressRec(rightMap[ch]);
+            merged[ch] = {
+              freehand: Math.max(L.freehand, R.freehand),
+              outline: L.outline || R.outline,
+            };
+          });
+          out[seatId] = merged;
+        });
+        return out;
+      }
+
+      function mergeSeats(a, b) {
+        const map = new Map();
+        (Array.isArray(a) ? a : []).concat(Array.isArray(b) ? b : []).forEach((s) => {
+          if (!s || s.id == null) return;
+          const id = Number(s.id) || s.id;
+          const prev = map.get(String(id));
+          const name = (s.name || "").trim();
+          if (!prev) {
+            map.set(String(id), { id: id, name: name });
+            return;
+          }
+          if (name && !prev.name) prev.name = name;
+        });
+        return [...map.values()].sort((x, y) => Number(x.id) - Number(y.id));
+      }
+
+      function mergeCharLists(a, b) {
+        const out = [];
+        const seen = new Set();
+        (a || []).concat(b || []).forEach((ch) => {
+          if (!ch || seen.has(ch)) return;
+          seen.add(ch);
+          out.push(ch);
+        });
+        return out;
+      }
+
+      function mergeVocabHints(a, b) {
+        const out = {};
+        const keys = new Set([
+          ...Object.keys(a && typeof a === "object" ? a : {}),
+          ...Object.keys(b && typeof b === "object" ? b : {}),
+        ]);
+        keys.forEach((sid) => {
+          out[sid] = mergeCharLists(
+            (a && a[sid]) || [],
+            (b && b[sid]) || []
+          );
+        });
+        return out;
+      }
+
+      function mergeBoardState(local, incoming) {
+        const L = local && typeof local === "object" ? local : {};
+        const R = incoming && typeof incoming === "object" ? incoming : {};
+        const seats = mergeSeats(L.seats, R.seats);
+        const progress = mergeProgressMaps(L.progress, R.progress);
+        const giftsClaimed = Object.assign({}, L.giftsClaimed || {}, R.giftsClaimed || {});
+        Object.keys(giftsClaimed).forEach((k) => {
+          giftsClaimed[k] = !!(L.giftsClaimed && L.giftsClaimed[k]) || !!(R.giftsClaimed && R.giftsClaimed[k]);
+        });
+        const newChars = mergeCharLists(L.newChars, R.newChars);
+        const reviewChars = mergeCharLists(L.reviewChars, R.reviewChars);
+        let chars = mergeCharLists(L.chars, R.chars);
+        if (!chars.length) chars = buildActiveChars(newChars, reviewChars, true);
+        // 課次：兩邊不同時，優先保留「本機目前有較多練習紀錄」的那側設定，否則用備份
+        const countProg = (p) => {
+          let n = 0;
+          const map = p && typeof p === "object" ? p : {};
+          Object.keys(map).forEach((sid) => {
+            const m = map[sid];
+            if (Array.isArray(m)) n += m.length;
+            else if (m && typeof m === "object") n += Object.keys(m).length;
+          });
+          return n;
+        };
+        const preferLocalLesson = countProg(L.progress) >= countProg(R.progress);
+        return {
+          className: L.className || R.className || "",
+          seats: seats.length ? seats : L.seats || R.seats || [],
+          lessonId: preferLocalLesson ? L.lessonId || R.lessonId || "" : R.lessonId || L.lessonId || "",
+          lessonName: preferLocalLesson
+            ? L.lessonName || R.lessonName || ""
+            : R.lessonName || L.lessonName || "",
+          newChars: newChars,
+          reviewChars: reviewChars,
+          includeReview: true,
+          chars: chars,
+          activeSeatId: L.activeSeatId != null ? L.activeSeatId : R.activeSeatId,
+          progress: progress,
+          giftsClaimed: giftsClaimed,
+          showOutline: false,
+          showMoe: true,
+          vocabHintsBySeat: mergeVocabHints(L.vocabHintsBySeat, R.vocabHintsBySeat),
+        };
+      }
+
+      function mergeClassesMetaJson(localRaw, incomingRaw) {
+        let local = null;
+        let incoming = null;
+        try {
+          local = localRaw ? JSON.parse(localRaw) : null;
+        } catch (_) {}
+        try {
+          incoming = incomingRaw ? JSON.parse(incomingRaw) : null;
+        } catch (_) {}
+        if (!incoming || typeof incoming !== "object") return localRaw || incomingRaw || "";
+        if (!local || typeof local !== "object") return incomingRaw;
+        const byId = new Map();
+        (Array.isArray(local.classes) ? local.classes : []).forEach((c) => {
+          if (c && c.id) byId.set(c.id, c);
+        });
+        (Array.isArray(incoming.classes) ? incoming.classes : []).forEach((c) => {
+          if (!c || !c.id) return;
+          const prev = byId.get(c.id);
+          if (!prev) {
+            byId.set(c.id, c);
+            return;
+          }
+          byId.set(
+            c.id,
+            Object.assign({}, prev, c, {
+              name: c.name || prev.name,
+              lessonUrl: c.lessonUrl || prev.lessonUrl,
+              examUrl: c.examUrl || prev.examUrl,
+              lessonSheetId: c.lessonSheetId || prev.lessonSheetId,
+              lessonGid: c.lessonGid || prev.lessonGid,
+              examSheetId: c.examSheetId || prev.examSheetId,
+              examGid: c.examGid || prev.examGid,
+            })
+          );
+        });
+        const activeClassId =
+          local.activeClassId || incoming.activeClassId || DEFAULT_CLASS_ID;
+        return JSON.stringify({
+          activeClassId: activeClassId,
+          classes: [...byId.values()],
+        });
+      }
+
       function applyProgressBackup(payload) {
         if (!payload || payload.app !== "wordbubble" || !payload.store || typeof payload.store !== "object") {
           throw new Error("不是生字泡泡的進度備份檔");
         }
-        const store = payload.store;
-        Object.keys(store).forEach((k) => {
-          if (store[k] == null) localStorage.removeItem(k);
-          else localStorage.setItem(k, String(store[k]));
+        const remote = payload.store;
+        const allKeys = new Set([
+          ...Object.keys(remote),
+          ...Object.keys(collectProgressBackup().store),
+        ]);
+        allKeys.forEach((k) => {
+          const remoteVal = remote[k];
+          const localVal = localStorage.getItem(k);
+          if (remoteVal == null || remoteVal === "") {
+            return; // 備份沒有的 key 保留本機
+          }
+          if (k === CLASSES_META_KEY) {
+            localStorage.setItem(k, mergeClassesMetaJson(localVal, remoteVal));
+            return;
+          }
+          if (k === SPEAK_LANG_KEY) {
+            if (!localVal) localStorage.setItem(k, String(remoteVal));
+            return;
+          }
+          if (
+            k === STORAGE_KEY ||
+            k.indexOf(STORAGE_KEY + "__") === 0 ||
+            k.indexOf("char_bubble_board_") === 0
+          ) {
+            let localObj = null;
+            let remoteObj = null;
+            try {
+              localObj = localVal ? JSON.parse(localVal) : null;
+            } catch (_) {}
+            try {
+              remoteObj = JSON.parse(remoteVal);
+            } catch (_) {
+              return;
+            }
+            const merged = mergeBoardState(localObj, remoteObj);
+            localStorage.setItem(k, JSON.stringify(merged));
+            return;
+          }
+          if (!localVal) localStorage.setItem(k, String(remoteVal));
         });
         loadClassesMeta();
         load(classesMeta.activeClassId);
@@ -2331,7 +2548,7 @@
         const payload = JSON.parse(text);
         if (
           !confirm(
-            "匯入會覆蓋本機現有班級與泡泡進度（以備份檔為準）。\n確定匯入「" +
+            "匯入會與本機進度合併：同一座號同一字取較高練習等級，兩邊練過的字都會保留。\n確定匯入「" +
               (file.name || "備份") +
               "」？"
           )
@@ -2339,7 +2556,9 @@
           return;
         }
         applyProgressBackup(payload);
-        alert("已匯入進度。兩台資料以這份備份為準；之後有新進度請再匯出傳一次。");
+        alert(
+          "已合併匯入。\n若另一台也有新進度：請在這台再按「匯出進度備份」傳回去匯入，兩邊就會對齊。"
+        );
         if (!OFFLINE_PACK) {
           try {
             await reloadLessons(true);
