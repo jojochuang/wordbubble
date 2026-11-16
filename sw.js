@@ -1,5 +1,5 @@
 /* 生字泡泡：快取主頁與內建筆順包 */
-const CACHE = "wordbubble-v11-backup-hint";
+const CACHE = "wordbubble-v12-vocab-resume-niao";
 const PRECACHE = [
   "./index.html",
   "./sw.js",

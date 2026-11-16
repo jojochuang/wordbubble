@@ -1282,6 +1282,8 @@
           showMoe: true,
           // 每位學生各自的「聽寫曾看筆順」字：{ "1": ["山", …] }
           vocabHintsBySeat: {},
+          // 聽寫斷點：{ "1": { "1週": { index, doneSlots, wordCount } } }
+          vocabResumeBySeat: {},
         };
       }
 
@@ -1433,6 +1435,9 @@
         if (!state.vocabHintsBySeat || typeof state.vocabHintsBySeat !== "object") {
           state.vocabHintsBySeat = {};
         }
+        if (!state.vocabResumeBySeat || typeof state.vocabResumeBySeat !== "object") {
+          state.vocabResumeBySeat = {};
+        }
         if (data && Array.isArray(data.vocabHintedChars) && data.vocabHintedChars.length) {
           const sid = state.activeSeatId != null ? String(state.activeSeatId) : null;
           if (sid) mergeVocabHintedCharsForSeat(sid, data.vocabHintedChars);
@@ -1487,6 +1492,48 @@
         const seat = activeSeat();
         if (!seat) return;
         mergeVocabHintedCharsForSeat(seat.id, chars);
+      }
+
+      function getVocabResume(seatId, lessonId, wordCount) {
+        if (seatId == null || !lessonId) return null;
+        const bag =
+          state.vocabResumeBySeat && state.vocabResumeBySeat[String(seatId)];
+        const rec = bag && bag[lessonId];
+        if (!rec || typeof rec !== "object") return null;
+        if (wordCount != null && Number(rec.wordCount) !== Number(wordCount)) return null;
+        const index = Math.max(0, Number(rec.index) || 0);
+        const doneSlots = Array.isArray(rec.doneSlots) ? rec.doneSlots.map(Boolean) : [];
+        return { index: index, doneSlots: doneSlots, wordCount: rec.wordCount };
+      }
+
+      function clearVocabResume(seatId, lessonId) {
+        if (seatId == null || !lessonId) return;
+        if (!state.vocabResumeBySeat || typeof state.vocabResumeBySeat !== "object") return;
+        const sid = String(seatId);
+        if (!state.vocabResumeBySeat[sid]) return;
+        delete state.vocabResumeBySeat[sid][lessonId];
+        if (!Object.keys(state.vocabResumeBySeat[sid]).length) {
+          delete state.vocabResumeBySeat[sid];
+        }
+      }
+
+      function saveVocabResumeFromSession() {
+        if (!vocabSession) return;
+        const seatId = vocabSession.seatId;
+        const lessonId = vocabSession.lessonId;
+        if (seatId == null || !lessonId) return;
+        if (!state.vocabResumeBySeat || typeof state.vocabResumeBySeat !== "object") {
+          state.vocabResumeBySeat = {};
+        }
+        const sid = String(seatId);
+        if (!state.vocabResumeBySeat[sid]) state.vocabResumeBySeat[sid] = {};
+        state.vocabResumeBySeat[sid][lessonId] = {
+          index: vocabSession.index,
+          doneSlots: (vocabSession.doneSlots || []).map(Boolean),
+          wordCount: (vocabSession.words || []).length,
+          updatedAt: Date.now(),
+        };
+        save();
       }
 
       function buildActiveChars(newChars, reviewChars, includeReview) {
@@ -2455,7 +2502,45 @@
           showOutline: false,
           showMoe: true,
           vocabHintsBySeat: mergeVocabHints(L.vocabHintsBySeat, R.vocabHintsBySeat),
+          vocabResumeBySeat: mergeVocabResume(L.vocabResumeBySeat, R.vocabResumeBySeat),
         };
+      }
+
+      function mergeVocabResume(a, b) {
+        const out = {};
+        const seats = new Set([
+          ...Object.keys(a && typeof a === "object" ? a : {}),
+          ...Object.keys(b && typeof b === "object" ? b : {}),
+        ]);
+        seats.forEach((sid) => {
+          const left = (a && a[sid]) || {};
+          const right = (b && b[sid]) || {};
+          const labels = new Set([...Object.keys(left), ...Object.keys(right)]);
+          const bag = {};
+          labels.forEach((label) => {
+            const L = left[label];
+            const R = right[label];
+            if (!L) {
+              bag[label] = R;
+              return;
+            }
+            if (!R) {
+              bag[label] = L;
+              return;
+            }
+            const li = Number(L.index) || 0;
+            const ri = Number(R.index) || 0;
+            if (ri > li) bag[label] = R;
+            else if (li > ri) bag[label] = L;
+            else {
+              const ld = (Array.isArray(L.doneSlots) ? L.doneSlots : []).filter(Boolean).length;
+              const rd = (Array.isArray(R.doneSlots) ? R.doneSlots : []).filter(Boolean).length;
+              bag[label] = rd >= ld ? R : L;
+            }
+          });
+          if (Object.keys(bag).length) out[sid] = bag;
+        });
+        return out;
       }
 
       function mergeClassesMetaJson(localRaw, incomingRaw) {
@@ -3965,6 +4050,21 @@
         const matchTxt = matched.length
           ? "對應生字課次：" + matched.map((m) => m.name).join("、") + "。"
           : "生字表尚無同目錄課次。";
+        let resumeTxt = "";
+        const seat = activeSeat();
+        if (seat) {
+          const resume = getVocabResume(seat.id, ex.label, ex.words.length);
+          if (resume) {
+            const n = Math.min(resume.index, ex.words.length - 1) + 1;
+            const partial =
+              Array.isArray(resume.doneSlots) &&
+              resume.doneSlots.some(Boolean) &&
+              !resume.doneSlots.every(Boolean);
+            resumeTxt = partial
+              ? "　（" + seatLabel(seat) + "上次寫到第 " + n + " 詞未完成，開始後會接著寫）"
+              : "　（" + seatLabel(seat) + "上次進度第 " + n + " 詞，開始後會從後續繼續）";
+          }
+        }
         els.vocabLessonHint.textContent =
           "「" +
           ex.label +
@@ -3973,7 +4073,8 @@
           " 題：" +
           ex.words.map((v) => v.speak).join("、") +
           "。" +
-          matchTxt;
+          matchTxt +
+          resumeTxt;
       }
 
       function openVocabExam() {
@@ -4041,7 +4142,8 @@
       }
 
       /** 結束聽寫：只合併「這位考生」的粉泡標記 → 列出曾看過的字 → 回泡泡 */
-      function finishVocabExam() {
+      function finishVocabExam(opts) {
+        const completed = !!(opts && opts.completed);
         const hinted =
           vocabSession && vocabSession.hintedChars
             ? Array.from(vocabSession.hintedChars)
@@ -4050,6 +4152,12 @@
           vocabSession && vocabSession.seatId != null
             ? vocabSession.seatId
             : activeSeat() && activeSeat().id;
+        const lessonId = vocabSession && vocabSession.lessonId;
+        if (completed) {
+          clearVocabResume(seatId, lessonId);
+        } else {
+          saveVocabResumeFromSession();
+        }
         if (seatId != null) mergeVocabHintedCharsForSeat(seatId, hinted);
         save();
         showVocabHintSummary(hinted);
@@ -4059,7 +4167,7 @@
       function closeVocabExam() {
         // 設定頁關閉：直接關掉；練習中結束：先結算粉泡
         if (vocabSession && els.vocabPlayPanel && !els.vocabPlayPanel.hidden) {
-          finishVocabExam();
+          finishVocabExam({ completed: false });
           return;
         }
         if (els.vocabSummaryPanel && !els.vocabSummaryPanel.hidden) {
@@ -4092,21 +4200,51 @@
             if (packed) charDataMemory[ch] = packed;
           });
         });
+        let startIndex = 0;
+        let startSlots = null;
+        const resume = getVocabResume(seat.id, ex.label, list.length);
+        if (resume) {
+          startIndex = Math.min(resume.index, list.length - 1);
+          const wordChars = (list[startIndex] && list[startIndex].chars) || [];
+          if (
+            resume.doneSlots &&
+            resume.doneSlots.length === wordChars.length &&
+            resume.doneSlots.some(Boolean)
+          ) {
+            if (resume.doneSlots.every(Boolean)) {
+              // 上一詞已寫完 → 從下一詞開始
+              if (startIndex < list.length - 1) {
+                startIndex += 1;
+                startSlots = null;
+              } else {
+                // 其實已考完，清斷點從頭
+                clearVocabResume(seat.id, ex.label);
+                startIndex = 0;
+                startSlots = null;
+              }
+            } else {
+              // 同一詞未寫完 → 接著寫剩餘格子
+              startSlots = resume.doneSlots.slice();
+            }
+          }
+        }
         vocabSession = {
           seatId: seat.id,
           lessonId: ex.label,
           lessonName: ex.label + (matched.length ? "（" + matched.map((m) => m.name).join("、") + "）" : ""),
           words: list,
-          index: 0,
-          doneSlots: [],
+          index: startIndex,
+          doneSlots: startSlots || [],
           hintedChars: new Set(),
         };
         if (els.vocabSetupPanel) els.vocabSetupPanel.hidden = true;
         if (els.vocabSummaryPanel) els.vocabSummaryPanel.hidden = true;
         if (els.vocabPlayPanel) els.vocabPlayPanel.hidden = false;
         syncVocabVoiceButtons();
-        renderVocabWord();
-        setTimeout(() => speakVocab(list[0].speak), 250);
+        renderVocabWord({ keepSlots: !!startSlots });
+        saveVocabResumeFromSession();
+        const cur = currentVocabWord();
+        if (cur) setTimeout(() => speakVocab(cur.speak), 250);
       }
 
       function currentVocabWord() {
@@ -4207,8 +4345,9 @@
           });
       }
 
-      function renderVocabWord() {
+      function renderVocabWord(opts) {
         if (!vocabSession || !els.vocabBoxes) return;
+        const keepSlots = !!(opts && opts.keepSlots);
         const word = currentVocabWord();
         const total = vocabSession.words.length;
         const idx = vocabSession.index;
@@ -4221,7 +4360,13 @@
             "<p class='vocab-hint'>全部寫完了！太棒了。</p>";
           return;
         }
-        vocabSession.doneSlots = Array.from({ length: word.chars.length }, () => false);
+        if (
+          !keepSlots ||
+          !Array.isArray(vocabSession.doneSlots) ||
+          vocabSession.doneSlots.length !== word.chars.length
+        ) {
+          vocabSession.doneSlots = Array.from({ length: word.chars.length }, () => false);
+        }
         els.vocabBoxes.innerHTML = "";
         word.chars.forEach((ch, i) => {
           const wrap = document.createElement("div");
@@ -4229,7 +4374,14 @@
           const btn = document.createElement("button");
           btn.type = "button";
           btn.className = "vocab-box";
-          btn.textContent = "";
+          const already = !!vocabSession.doneSlots[i];
+          if (already) {
+            btn.classList.add("done");
+            btn.textContent = ch;
+            btn.disabled = true;
+          } else {
+            btn.textContent = "";
+          }
           btn.setAttribute("aria-label", "第 " + (i + 1) + " 字");
           btn.addEventListener("click", () => {
             if (!vocabSession || vocabSession.doneSlots[i]) return;
@@ -4278,16 +4430,20 @@
           markCharPractice(seat, ch, false);
         }
         const allDone = vocabSession.doneSlots.every(Boolean);
-        if (!allDone) return;
+        if (!allDone) {
+          saveVocabResumeFromSession();
+          return;
+        }
         setTimeout(() => {
           if (!vocabSession) return;
           closeVocabStrokeHint();
           if (vocabSession.index >= vocabSession.words.length - 1) {
-            finishVocabExam();
+            finishVocabExam({ completed: true });
             return;
           }
           vocabSession.index += 1;
           renderVocabWord();
+          saveVocabResumeFromSession();
           const next = currentVocabWord();
           if (next) setTimeout(() => speakVocab(next.speak), 200);
         }, 500);
@@ -4444,11 +4600,12 @@
           if (!vocabSession) return;
           closeVocabStrokeHint();
           if (vocabSession.index >= vocabSession.words.length - 1) {
-            finishVocabExam();
+            finishVocabExam({ completed: true });
             return;
           }
           vocabSession.index += 1;
           renderVocabWord();
+          saveVocabResumeFromSession();
           const next = currentVocabWord();
           if (next) speakVocab(next.speak);
         });
