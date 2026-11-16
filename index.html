@@ -629,7 +629,8 @@
       flex-shrink: 0;
     }
     #newClassLessonUrl,
-    #newClassExamUrl {
+    #newClassExamUrl,
+    #classExamUrlInput {
       min-height: 72px;
       font-size: 0.92rem;
     }
@@ -891,6 +892,11 @@
         <label for="reviewCharsInput">本課複習字（可微調）</label>
         <textarea id="reviewCharsInput" placeholder="例：二三五上小口"></textarea>
       </div>
+      <div class="field" id="classExamUrlField">
+        <label for="classExamUrlInput">本班考試語詞試算表網址</label>
+        <textarea id="classExamUrlInput" placeholder="可留空；之後可在此補填（請保留 gid=…）" spellcheck="false"></textarea>
+        <p class="hint" style="margin:8px 0 0;">語詞聽寫用。建立班級時沒填的，可在這裡補上後按「儲存並開始」。</p>
+      </div>
       <div class="row-btns">
         <button type="button" class="pill primary" id="saveSetupBtn">儲存並開始</button>
         <button type="button" class="pill ghost" id="exportYearOfflineBtn">匯出全年離線包</button>
@@ -1086,6 +1092,7 @@
       // 與聽寫語詞考試同一試算表（A＝目錄，B～K＝題）
       const EXAM_SHEET_ID = "1PWGAxP2QEcfb3Aj3m7S-SWVqrxpI3Y3ywhkXcaxv9Ko";
       const EXAM_GID = "1975515821";
+      const EXAM_GID_BOOK2 = "1515989355";
       const SPEAK_LANG_KEY = "dictation_exam_speak_lang";
       const GIFT_EMOJIS = ["🎁", "🌟", "🦄", "🍭", "🎈", "🦊", "🌈", "🏆"];
       // 完整離線單檔（舊流程）或 GitHub 內建 pack-data.js / pack-data-book2.js
@@ -1157,6 +1164,7 @@
         lessonHint: document.getElementById("lessonHint"),
         charsInput: document.getElementById("charsInput"),
         reviewCharsInput: document.getElementById("reviewCharsInput"),
+        classExamUrlInput: document.getElementById("classExamUrlInput"),
         saveSetupBtn: document.getElementById("saveSetupBtn"),
         exportYearOfflineBtn: document.getElementById("exportYearOfflineBtn"),
         closeSetupBtn: document.getElementById("closeSetupBtn"),
@@ -1247,10 +1255,22 @@
           lessonSheetId: LESSON_SHEET_ID,
           lessonGid: LESSON_GID_BOOK2,
           examSheetId: EXAM_SHEET_ID,
-          examGid: EXAM_GID,
+          examGid: EXAM_GID_BOOK2,
           lessonUrl: "",
           examUrl: "",
         };
+      }
+
+      function sheetUrlFromIds(sheetId, gid) {
+        if (!sheetId) return "";
+        return (
+          "https://docs.google.com/spreadsheets/d/" +
+          sheetId +
+          "/edit?gid=" +
+          encodeURIComponent(gid || "0") +
+          "#gid=" +
+          encodeURIComponent(gid || "0")
+        );
       }
 
       function defaultClassesMeta() {
@@ -1328,7 +1348,7 @@
                 lessonSheetId: LESSON_SHEET_ID,
                 lessonGid: LESSON_GID_BOOK2,
                 examSheetId: EXAM_SHEET_ID,
-                examGid: EXAM_GID,
+                examGid: EXAM_GID_BOOK2,
               });
             });
           }
@@ -3012,6 +3032,50 @@
         }
       }
 
+      function classExamUrlDisplay(cls) {
+        if (!cls) return "";
+        if (cls.examUrl) return cls.examUrl;
+        if (cls.examSheetId) return sheetUrlFromIds(cls.examSheetId, cls.examGid);
+        return "";
+      }
+
+      function applyExamUrlToActiveClass(rawUrl) {
+        const cls = activeClassMeta();
+        if (!cls || !classesMeta || !Array.isArray(classesMeta.classes)) return false;
+        const examUrl = String(rawUrl || "").trim();
+        let examSheetId = "";
+        let examGid = "";
+        if (examUrl) {
+          examSheetId = extractSheetIdFromUrl(examUrl);
+          if (!examSheetId) {
+            alert("考試語詞試算表網址無法辨識，請檢查（需含 /spreadsheets/d/… 與 gid=）。");
+            return false;
+          }
+          examGid = extractGidFromUrl(examUrl) || "0";
+        }
+        const idx = classesMeta.classes.findIndex((c) => c && c.id === cls.id);
+        if (idx < 0) return false;
+        const next = Object.assign({}, classesMeta.classes[idx], {
+          examSheetId: examSheetId,
+          examGid: examGid,
+          examUrl: examUrl,
+        });
+        // 內建班級仍鎖定官方考試分頁；若使用者清空則回預設
+        if (cls.id === DEFAULT_CLASS_ID) {
+          next.examSheetId = EXAM_SHEET_ID;
+          next.examGid = EXAM_GID;
+          if (!examUrl) next.examUrl = "";
+        } else if (cls.id === BOOK2_CLASS_ID) {
+          next.examSheetId = EXAM_SHEET_ID;
+          next.examGid = EXAM_GID_BOOK2;
+          if (!examUrl) next.examUrl = "";
+        }
+        classesMeta.classes[idx] = next;
+        saveClassesMeta();
+        examCatalog = [];
+        return true;
+      }
+
       function fillSetupForm() {
         els.seatCountInput.value = String(state.seats.length || 1);
         els.charsInput.value = (state.newChars && state.newChars.length
@@ -3020,6 +3084,9 @@
         ).join("");
         if (els.reviewCharsInput) {
           els.reviewCharsInput.value = (state.reviewChars || []).join("");
+        }
+        if (els.classExamUrlInput) {
+          els.classExamUrlInput.value = classExamUrlDisplay(activeClassMeta());
         }
         fillLessonSelect(state.lessonId || "");
         rebuildNamesEdit();
@@ -3874,6 +3941,9 @@
       }
 
       function saveSetup() {
+        if (els.classExamUrlInput) {
+          if (!applyExamUrlToActiveClass(els.classExamUrlInput.value)) return;
+        }
         const n = Math.max(1, Math.min(50, parseInt(els.seatCountInput.value, 10) || 1));
         const seats = [];
         for (let i = 1; i <= n; i++) {
