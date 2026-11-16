@@ -905,7 +905,7 @@
         <button type="button" class="pill ghost" id="closeSetupBtn">關閉</button>
       </div>
       <input type="file" id="importProgressFile" accept="application/json,.json" hidden />
-      <p class="hint" style="margin:10px 0 0;">兩台 iPad 進度各自存在本機。對齊方式：A 匯出 → 傳到 B 匯入（會<strong>合併</strong>兩邊進度，取較高成果，不會抹掉本機已練過的字）。B 若也有新進度，再匯出傳回 A 匯入一次即可兩邊對齊。</p>
+      <p class="hint" style="margin:10px 0 0;">兩台對齊：A 匯出 → B 匯入（合併，取較高進度）→ 若 B 也有新的，再匯出傳回 A。檔案只是當次快照，對齊後舊的 <code>.json</code> 可刪掉；不必留很多版本，用「剛剛匯出、時間最新」那份即可。</p>
       <p class="hint" id="offlineHint" hidden></p>
     </div>
   </div>
@@ -2278,6 +2278,17 @@
         };
       }
 
+      function formatBackupTime(iso) {
+        if (!iso) return "";
+        const d = new Date(iso);
+        if (Number.isNaN(d.getTime())) return String(iso);
+        try {
+          return d.toLocaleString("zh-TW", { hour12: false });
+        } catch (_) {
+          return d.toISOString();
+        }
+      }
+
       function exportProgressBackup() {
         try {
           save();
@@ -2299,7 +2310,9 @@
           alert(
             "已匯出進度備份（" +
               Object.keys(payload.store).length +
-              " 筆）。\n用 AirDrop／「檔案」傳到另一台 iPad，再開設定 → 匯入進度備份。"
+              " 筆）\n時間：" +
+              formatBackupTime(payload.exportedAt) +
+              "\n\n用 AirDrop／「檔案」傳到另一台 → 設定 → 匯入。對齊後舊備份可刪，留最新一份即可。"
           );
         } catch (e) {
           alert("匯出失敗：" + (e && e.message ? e.message : e));
@@ -2546,18 +2559,20 @@
         if (!file) return;
         const text = await file.text();
         const payload = JSON.parse(text);
+        const when = formatBackupTime(payload && payload.exportedAt);
         if (
           !confirm(
-            "匯入會與本機進度合併：同一座號同一字取較高練習等級，兩邊練過的字都會保留。\n確定匯入「" +
+            "匯入會與本機進度合併（同一字取較高等級，兩邊都保留）。\n\n檔名：" +
               (file.name || "備份") +
-              "」？"
+              (when ? "\n匯出時間：" + when : "") +
+              "\n\n請選「剛從另一台傳來、時間最新」的那份；對齊後舊備份可刪。\n確定匯入？"
           )
         ) {
           return;
         }
         applyProgressBackup(payload);
         alert(
-          "已合併匯入。\n若另一台也有新進度：請在這台再按「匯出進度備份」傳回去匯入，兩邊就會對齊。"
+          "已合併匯入。\n若另一台也有新進度：請在這台再按「匯出進度備份」傳回去匯入。對齊後「檔案」裡舊的 json 可刪掉。"
         );
         if (!OFFLINE_PACK) {
           try {
