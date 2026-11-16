@@ -1110,6 +1110,7 @@
       }
       function mergePackCharData() {
         const out = {};
+        // 先一冊再二冊：二冊有較佳 Track 時覆蓋；一冊獨有字仍保留（聽寫常會用到）
         const layers = [
           (BUBBLE_PACK && BUBBLE_PACK.charData) || {},
           (BUBBLE_PACK_BOOK2 && BUBBLE_PACK_BOOK2.charData) || {},
@@ -1127,6 +1128,29 @@
         return out;
       }
       const charDataMemory = mergePackCharData();
+
+      /** 二冊包 → 一冊包 → 離線包；聽寫遇到一冊複習字可自動沿用一冊筆順 */
+      function lookupEmbeddedChar(ch) {
+        if (!ch) return null;
+        const packs = [
+          BUBBLE_PACK_BOOK2 && BUBBLE_PACK_BOOK2.charData,
+          BUBBLE_PACK && BUBBLE_PACK.charData,
+          OFFLINE_PACK && OFFLINE_PACK.charData,
+        ];
+        let best = null;
+        for (let i = 0; i < packs.length; i++) {
+          const layer = packs[i];
+          if (!layer || !layer[ch] || !Array.isArray(layer[ch].strokes)) continue;
+          if (!best || medianSourceRank(layer[ch]) > medianSourceRank(best)) {
+            best = layer[ch];
+          }
+        }
+        return best;
+      }
+
+      function approxMediansFromStrokes(strokes) {
+        return (strokes || []).map((d) => approxMedian(d, 32));
+      }
 
       const els = {
         classSub: document.getElementById("classSub"),
@@ -2131,18 +2155,20 @@
         const wantMoe = !opts || opts.moe !== false;
         if (charDataMemory[ch] && Array.isArray(charDataMemory[ch].strokes)) {
           const cached = charDataMemory[ch];
-          if (wantMoe && !cached.medians && !HAS_EMBEDDED_PACK) {
-            // 背景補教育部方向，不擋回傳
-            enrichMediansInBackground(ch, cached);
-          }
+          if (wantMoe && !cached.medians) enrichMediansInBackground(ch, cached);
           return cached;
+        }
+        // 記憶體沒有時，再顯式從二冊／一冊內建包抓（聽寫一冊複習字）
+        const fromPack = lookupEmbeddedChar(ch);
+        if (fromPack) {
+          charDataMemory[ch] = fromPack;
+          if (wantMoe && !fromPack.medians) enrichMediansInBackground(ch, fromPack);
+          return fromPack;
         }
         const fromIdb = await idbGetChar(ch);
         if (fromIdb && Array.isArray(fromIdb.strokes) && fromIdb.strokes.length) {
           charDataMemory[ch] = fromIdb;
-          if (wantMoe && !fromIdb.medians && !HAS_EMBEDDED_PACK) {
-            enrichMediansInBackground(ch, fromIdb);
-          }
+          if (wantMoe && !fromIdb.medians) enrichMediansInBackground(ch, fromIdb);
           return fromIdb;
         }
         const strokes = await loadLocalStrokes(ch);
@@ -2152,7 +2178,7 @@
         const data = { strokes: strokes, medians: medians, source: source };
         charDataMemory[ch] = data;
         idbSetChar(ch, data);
-        if (wantMoe && !HAS_EMBEDDED_PACK) enrichMediansInBackground(ch, data);
+        if (wantMoe) enrichMediansInBackground(ch, data);
         return data;
       }
 
@@ -3721,6 +3747,14 @@
           return;
         }
         const matched = lessonsForCatalogKey(ex.label);
+        // 聽寫前把本週用字從二冊／一冊包預載進記憶體（一冊複習字可沿用一冊包）
+        list.forEach((w) => {
+          (w.chars || []).forEach((ch) => {
+            if (charDataMemory[ch] && Array.isArray(charDataMemory[ch].strokes)) return;
+            const packed = lookupEmbeddedChar(ch);
+            if (packed) charDataMemory[ch] = packed;
+          });
+        });
         vocabSession = {
           seatId: seat.id,
           lessonId: ex.label,
@@ -3784,20 +3818,24 @@
             const strokes = data && data.strokes;
             if (!strokes || !strokes.length) {
               els.vocabStrokeHost.innerHTML =
-                "<div class='moe-loading'>找不到「" + ch + "」的筆順資料。</div>";
+                "<div class='moe-loading'>找不到「" + ch + "」的筆順資料（一／二冊包皆無）。</div>";
               return;
             }
             const run = (m) => {
               if (vocabHintChar !== ch) return;
-              if (!m || m.length !== strokes.length) {
+              let med = m;
+              if (!med || med.length !== strokes.length) {
+                med = approxMediansFromStrokes(strokes);
+              }
+              if (!med || med.length !== strokes.length) {
                 els.vocabStrokeHost.innerHTML =
-                  "<div class='moe-loading'>無法取得筆順方向（請確認可連線教育部 Track API）</div>";
+                  "<div class='moe-loading'>無法取得「" + ch + "」的筆順方向。</div>";
                 return;
               }
               vocabHintDemo = createLocalStrokeDemo(
                 els.vocabStrokeHost,
                 strokes,
-                m,
+                med,
                 demoOpts
               );
             };
@@ -3806,7 +3844,7 @@
               return;
             }
             els.vocabStrokeHost.innerHTML =
-              "<div class='moe-loading'>載入筆順方向（教育部 Track）…</div>";
+              "<div class='moe-loading'>載入筆順方向…</div>";
             Promise.resolve()
               .then(() => loadMoeTrackMedians(ch, strokes.length))
               .then((m) => m || loadMediansJson(ch, strokes.length))
