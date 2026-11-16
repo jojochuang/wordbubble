@@ -1,5 +1,5 @@
 /* 生字泡泡：快取主頁與內建筆順包 */
-const CACHE = "wordbubble-v15-exam-align";
+const CACHE = "wordbubble-v16-class-delete";
 const PRECACHE = [
   "./index.html",
   "./sw.js",

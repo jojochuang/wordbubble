@@ -655,6 +655,10 @@
       flex: 1;
       min-width: 0;
     }
+    .class-switch-item {
+      position: relative;
+      display: inline-flex;
+    }
     .class-switch-btn {
       border: 1.5px solid var(--line);
       background: #fff;
@@ -668,6 +672,32 @@
     .class-switch-btn.active {
       background: #16324f;
       border-color: #16324f;
+      color: #fff;
+    }
+    .class-del {
+      position: absolute;
+      top: -6px;
+      left: -6px;
+      width: 22px;
+      height: 22px;
+      border: 1.5px solid var(--line);
+      border-radius: 50%;
+      background: #fff;
+      color: #c0392b;
+      font-size: 14px;
+      font-weight: 900;
+      line-height: 1;
+      padding: 0;
+      cursor: pointer;
+      display: grid;
+      place-items: center;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+      z-index: 1;
+    }
+    .class-del:hover,
+    .class-del:focus-visible {
+      background: #c0392b;
+      border-color: #c0392b;
       color: #fff;
     }
     #addClassBtn {
@@ -1975,14 +2005,73 @@
         els.classSwitchList.innerHTML = "";
         const activeId = classesMeta.activeClassId;
         (classesMeta.classes || []).forEach((cls) => {
+          const wrap = document.createElement("div");
+          wrap.className = "class-switch-item";
           const btn = document.createElement("button");
           btn.type = "button";
           btn.className = "class-switch-btn" + (cls.id === activeId ? " active" : "");
           btn.textContent = cls.name;
           btn.setAttribute("aria-pressed", cls.id === activeId ? "true" : "false");
           btn.addEventListener("click", () => switchClass(cls.id));
-          els.classSwitchList.appendChild(btn);
+          const delBtn = document.createElement("button");
+          delBtn.type = "button";
+          delBtn.className = "class-del";
+          delBtn.textContent = "×";
+          delBtn.title = "刪除此班級";
+          delBtn.setAttribute("aria-label", "刪除班級 " + (cls.name || ""));
+          delBtn.addEventListener("click", (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            removeClassFromSetup(cls.id);
+          });
+          wrap.appendChild(btn);
+          wrap.appendChild(delBtn);
+          els.classSwitchList.appendChild(wrap);
         });
+      }
+
+      function removeClassFromSetup(classId) {
+        const list = (classesMeta && classesMeta.classes) || [];
+        const cls = list.find((c) => c && c.id === classId);
+        if (!cls) return;
+        if (cls.builtin || cls.id === DEFAULT_CLASS_ID || cls.id === BOOK2_CLASS_ID) {
+          alert("「" + (cls.name || "此班級") + "」是內建班級，不能刪除。");
+          return;
+        }
+        if (list.length <= 1) {
+          alert("至少保留一個班級。");
+          return;
+        }
+        if (
+          !confirm(
+            "確定刪掉此班級？\n\n" +
+              (cls.name || classId) +
+              "\n\n此班的座號與泡泡進度也會一併移除。"
+          )
+        ) {
+          return;
+        }
+        const wasActive = classesMeta.activeClassId === classId;
+        if (wasActive) save();
+        classesMeta.classes = list.filter((c) => c && c.id !== classId);
+        try {
+          localStorage.removeItem(boardStorageKey(classId));
+        } catch (_) {}
+        if (wasActive || !classesMeta.classes.some((c) => c.id === classesMeta.activeClassId)) {
+          const next = classesMeta.classes[0];
+          classesMeta.activeClassId = next ? next.id : DEFAULT_CLASS_ID;
+          load(classesMeta.activeClassId);
+          lessonCatalog = [];
+          examCatalog = [];
+          ensureSeatProgressKeys();
+          fillSetupForm();
+          renderAll();
+          if (!OFFLINE_PACK) {
+            reloadLessons(true).catch(() => {});
+          }
+        }
+        saveClassesMeta();
+        renderClassSwitch();
       }
 
       async function switchClass(classId) {
