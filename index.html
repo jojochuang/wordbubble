@@ -405,18 +405,41 @@
       width: 2.2em;
       flex-shrink: 0;
     }
-    .names-edit .mini input {
+    .names-edit .mini input[type="text"] {
       border: none;
       outline: none;
       width: 100%;
+      min-width: 0;
       font: inherit;
       background: transparent;
+    }
+    .names-edit .mini {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .names-edit .hand-select {
+      flex-shrink: 0;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 4px 6px;
+      font: inherit;
+      font-size: 0.78rem;
+      font-weight: 700;
+      color: var(--ink);
+      background: #fff;
+      max-width: 5.5em;
     }
     .write-layout {
       display: grid;
       grid-template-columns: 1fr;
       gap: 12px;
     }
+    /* 右撇子：筆順在左（或上方）、寫字在右；左撇子相反 */
+    .write-layout.has-moe.hand-right .moe-box { order: 1; }
+    .write-layout.has-moe.hand-right .write-main { order: 2; }
+    .write-layout.has-moe.hand-left .write-main { order: 1; }
+    .write-layout.has-moe.hand-left .moe-box { order: 2; }
     @media (min-width: 860px) {
       .write-layout.has-moe {
         grid-template-columns: 1fr 1fr;
@@ -871,7 +894,7 @@
         <input id="seatCountInput" type="number" min="1" max="50" value="1" />
       </div>
       <div class="field">
-        <label>座號姓名（可空白，空白就顯示「N號」）</label>
+        <label>座號姓名／慣用手（可空白姓名；右撇＝筆順在左方便對看）</label>
         <div class="names-edit" id="namesEdit"></div>
       </div>
       <div class="field">
@@ -2418,6 +2441,18 @@
         return out;
       }
 
+      function normalizeHand(v) {
+        return v === "left" ? "left" : "right";
+      }
+
+      function seatHand(seat) {
+        if (!seat) {
+          const active = activeSeat();
+          return normalizeHand(active && active.hand);
+        }
+        return normalizeHand(seat.hand);
+      }
+
       function mergeSeats(a, b) {
         const map = new Map();
         (Array.isArray(a) ? a : []).concat(Array.isArray(b) ? b : []).forEach((s) => {
@@ -2425,11 +2460,13 @@
           const id = Number(s.id) || s.id;
           const prev = map.get(String(id));
           const name = (s.name || "").trim();
+          const hand = normalizeHand(s.hand);
           if (!prev) {
-            map.set(String(id), { id: id, name: name });
+            map.set(String(id), { id: id, name: name, hand: hand });
             return;
           }
           if (name && !prev.name) prev.name = name;
+          if (s.hand === "left" || s.hand === "right") prev.hand = hand;
         });
         return [...map.values()].sort((x, y) => Number(x.id) - Number(y.id));
       }
@@ -3479,26 +3516,50 @@
 
       function rebuildNamesEdit() {
         const n = Math.max(1, Math.min(50, parseInt(els.seatCountInput.value, 10) || 1));
-        const prev = {};
+        const prevName = {};
+        const prevHand = {};
         els.namesEdit.querySelectorAll("input[data-id]").forEach((inp) => {
-          prev[inp.getAttribute("data-id")] = inp.value;
+          prevName[inp.getAttribute("data-id")] = inp.value;
+        });
+        els.namesEdit.querySelectorAll("select[data-hand-id]").forEach((sel) => {
+          prevHand[sel.getAttribute("data-hand-id")] = sel.value;
         });
         state.seats.forEach((s) => {
-          prev[String(s.id)] = s.name || prev[String(s.id)] || "";
+          prevName[String(s.id)] = s.name || prevName[String(s.id)] || "";
+          prevHand[String(s.id)] = normalizeHand(
+            prevHand[String(s.id)] != null ? prevHand[String(s.id)] : s.hand
+          );
         });
         els.namesEdit.innerHTML = "";
         for (let i = 1; i <= n; i++) {
-          const wrap = document.createElement("label");
+          const wrap = document.createElement("div");
           wrap.className = "mini";
-          wrap.innerHTML = "<span>" + i + "號</span>";
+          const label = document.createElement("span");
+          label.textContent = i + "號";
           const input = document.createElement("input");
           input.type = "text";
           input.setAttribute("data-id", String(i));
           input.placeholder = "姓名";
-          input.value = prev[String(i)] || "";
+          input.value = prevName[String(i)] || "";
+          const handSel = document.createElement("select");
+          handSel.setAttribute("data-hand-id", String(i));
+          handSel.className = "hand-select";
+          handSel.setAttribute("aria-label", i + "號慣用手");
+          handSel.innerHTML =
+            '<option value="right">右撇</option><option value="left">左撇</option>';
+          handSel.value = normalizeHand(prevHand[String(i)]);
+          wrap.appendChild(label);
           wrap.appendChild(input);
+          wrap.appendChild(handSel);
           els.namesEdit.appendChild(wrap);
         }
+      }
+
+      function applyWriteHandLayout() {
+        if (!els.writeLayout) return;
+        const hand = seatHand(activeSeat());
+        els.writeLayout.classList.toggle("hand-right", hand === "right");
+        els.writeLayout.classList.toggle("hand-left", hand === "left");
       }
 
       function classExamUrlDisplay(cls) {
@@ -3829,6 +3890,7 @@
         const showMoe = !isVocab;
         if (els.moeBox) els.moeBox.hidden = !showMoe;
         if (els.writeLayout) els.writeLayout.classList.toggle("has-moe", showMoe);
+        applyWriteHandLayout();
         destroyMoeDemo();
         els.writeOverlay.hidden = false;
         destroyQuiz();
@@ -4500,7 +4562,15 @@
         const seats = [];
         for (let i = 1; i <= n; i++) {
           const inp = els.namesEdit.querySelector('input[data-id="' + i + '"]');
-          seats.push({ id: i, name: inp ? String(inp.value || "").trim() : "" });
+          const handSel = els.namesEdit.querySelector('select[data-hand-id="' + i + '"]');
+          const prev = state.seats.find((s) => s.id === i);
+          seats.push({
+            id: i,
+            name: inp ? String(inp.value || "").trim() : "",
+            hand: normalizeHand(
+              handSel ? handSel.value : prev && prev.hand
+            ),
+          });
         }
         const newChars = extractHan(els.charsInput.value);
         const reviewChars = extractHan(els.reviewCharsInput ? els.reviewCharsInput.value : "");
