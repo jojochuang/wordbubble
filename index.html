@@ -905,6 +905,192 @@
       border-color: #16324f;
       color: #fff;
     }
+    .night-toggle {
+      padding: 6px 10px;
+      border-radius: 999px;
+      border: 1px solid #888;
+      background: rgba(255, 255, 255, 0.9);
+      color: #333;
+      font: inherit;
+      font-size: 0.85rem;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .night-toggle:hover { background: #eee; }
+
+    /* 夜覽：黑底減少藍光（寫字格維持淺底以利書寫） */
+    body.night-mode {
+      color: #e8eef5;
+      background:
+        radial-gradient(ellipse 70% 50% at 15% 0%, #1a2a3a 0%, transparent 55%),
+        radial-gradient(ellipse 60% 45% at 90% 10%, #2a2218 0%, transparent 50%),
+        linear-gradient(180deg, #0d0d0d, #121820 55%, #0d0d0d) !important;
+    }
+    body.night-mode .night-toggle {
+      background: rgba(40, 40, 40, 0.9);
+      color: #ddd;
+      border-color: #666;
+    }
+    body.night-mode .night-toggle:hover { background: #333; }
+    body.night-mode .topbar {
+      background: rgba(18, 22, 28, 0.92);
+      border-bottom-color: rgba(255, 255, 255, 0.1);
+    }
+    body.night-mode .brand h1 { color: #eef3f8; }
+    body.night-mode .brand .sub,
+    body.night-mode .meter-label,
+    body.night-mode .empty-hint,
+    body.night-mode .sheet .hint,
+    body.night-mode .vocab-hint,
+    body.night-mode .write-msg,
+    body.night-mode .moe-credit,
+    body.night-mode .field label,
+    body.night-mode .write-toggles {
+      color: #9aafc2;
+    }
+    body.night-mode .pill.ghost,
+    body.night-mode .seat-now,
+    body.night-mode .class-switch-btn,
+    body.night-mode .voice-mode-btn,
+    body.night-mode .hand-select,
+    body.night-mode .seat-del,
+    body.night-mode .class-del {
+      background: #1a1a1a;
+      border-color: #444;
+      color: #ddd;
+    }
+    body.night-mode .pill.ghost:hover,
+    body.night-mode .seat-now:hover {
+      background: #242a32;
+    }
+    body.night-mode .pill.primary,
+    body.night-mode .class-switch-btn.active,
+    body.night-mode .voice-mode-btn.active,
+    body.night-mode .seat-now.active {
+      background: #2aa0e8;
+      border-color: #2aa0e8;
+      color: #fff;
+    }
+    body.night-mode .seat-del,
+    body.night-mode .class-del {
+      color: #ff8a80;
+    }
+    body.night-mode .seat-del:hover,
+    body.night-mode .class-del:hover {
+      background: #c0392b;
+      border-color: #c0392b;
+      color: #fff;
+    }
+    body.night-mode .board,
+    body.night-mode .progress-row,
+    body.night-mode .quick-seats {
+      background: transparent;
+    }
+    body.night-mode .meter {
+      background: rgba(255, 255, 255, 0.12);
+    }
+    body.night-mode .overlay {
+      background: rgba(0, 0, 0, 0.72);
+    }
+    body.night-mode .sheet {
+      background: #161a20;
+      border-color: #333;
+      color: #e8eef5;
+      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45);
+    }
+    body.night-mode .sheet h2,
+    body.night-mode .sheet .display {
+      color: #eef3f8;
+    }
+    body.night-mode .field input,
+    body.night-mode .field textarea,
+    body.night-mode .field select,
+    body.night-mode .lesson-row select,
+    body.night-mode #classExamUrlInput,
+    body.night-mode #newClassLessonUrl,
+    body.night-mode #newClassExamUrl,
+    body.night-mode #charsInput,
+    body.night-mode #reviewCharsInput,
+    body.night-mode #newClassNameInput {
+      background: #1a1a1a;
+      color: #eee;
+      border-color: #444;
+    }
+    body.night-mode .names-edit .mini {
+      background: #1a1a1a;
+      border-color: #444;
+    }
+    body.night-mode .names-edit .mini input[type="text"] {
+      color: #eee;
+    }
+    body.night-mode .names-edit .mini span.seat-no {
+      color: #9aafc2;
+    }
+    body.night-mode .vocab-box {
+      background: #1a1a1a;
+      border-color: #444;
+      color: #eee;
+    }
+    body.night-mode .vocab-box.done {
+      border-color: #4eae5f;
+      background:
+        linear-gradient(#2a4a32, #2a4a32) center/2px 100% no-repeat,
+        linear-gradient(#2a4a32, #2a4a32) center/100% 2px no-repeat,
+        #142018;
+      color: #9adba8;
+    }
+    body.night-mode .vocab-stroke-hint-btn {
+      background: rgba(30, 30, 30, 0.95);
+      border-color: #555;
+    }
+    body.night-mode .vocab-stroke-host,
+    body.night-mode .moe-box {
+      background: #1a1a1a;
+      border-color: #444;
+    }
+    body.night-mode .moe-demo-controls {
+      background: #161a20;
+      border-top-color: #333;
+    }
+    body.night-mode .moe-demo-controls select {
+      background: #1a1a1a;
+      color: #eee;
+      border-color: #555;
+    }
+    body.night-mode .moe-credit {
+      background: #161a20;
+      border-top-color: #333;
+    }
+    body.night-mode .moe-credit a { color: #90caf9; }
+    body.night-mode .vocab-summary-chars .chip {
+      background: #1a1a1a;
+      border-color: #444;
+      color: #eee;
+    }
+    body.night-mode .seat-btn {
+      background: #1a1a1a;
+      border-color: #444;
+      color: #ddd;
+    }
+    body.night-mode .seat-btn.active {
+      background: #2aa0e8;
+      border-color: #2aa0e8;
+      color: #fff;
+    }
+    body.night-mode #hanziTarget {
+      /* 書寫區維持淺底，方便對照筆順 */
+      border-color: #5a8fb0;
+      background:
+        linear-gradient(#6a9ab8, #6a9ab8) center/2px 100% no-repeat,
+        linear-gradient(#6a9ab8, #6a9ab8) center/100% 2px no-repeat,
+        #f4fafc;
+    }
+    body.night-mode .write-msg.ok { color: #9adba8; }
+    body.night-mode .write-msg.bad { color: #ff8a80; }
+    body.night-mode .gift-overlay .sheet {
+      background: #161a20;
+      color: #eee;
+    }
   </style>
 </head>
 <body>
@@ -914,6 +1100,7 @@
       <div class="sub" id="classSub">先設定課次與當週生字</div>
     </div>
     <div class="top-actions">
+      <button type="button" class="night-toggle" id="nightToggle" title="夜覽／日間（黑底減少藍光）">夜覽</button>
       <button type="button" class="seat-now empty" id="seatNowBtn" title="選擇座號">請先選座號</button>
       <button type="button" class="pill ghost" id="vocabExamBtn">語詞聽寫</button>
       <button type="button" class="pill ghost" id="setupBtn">設定</button>
@@ -1173,7 +1360,30 @@
       const EXAM_GID = "1975515821";
       const EXAM_GID_BOOK2 = "1515989355";
       const SPEAK_LANG_KEY = "dictation_exam_speak_lang";
+      const NIGHT_KEY = "wordbubble_night";
       const GIFT_EMOJIS = ["🎁", "🌟", "🦄", "🍭", "🎈", "🦊", "🌈", "🏆"];
+
+      function applyNightMode(on) {
+        document.body.classList.toggle("night-mode", !!on);
+        const btn = document.getElementById("nightToggle");
+        if (btn) btn.textContent = on ? "日間" : "夜覽";
+        const theme = document.querySelector('meta[name="theme-color"]');
+        if (theme) theme.setAttribute("content", on ? "#0d0d0d" : "#2aa0e8");
+      }
+      (function initNightMode() {
+        const active = localStorage.getItem(NIGHT_KEY) === "1";
+        applyNightMode(active);
+        const btn = document.getElementById("nightToggle");
+        if (btn) {
+          btn.addEventListener("click", () => {
+            const next = !document.body.classList.contains("night-mode");
+            applyNightMode(next);
+            try {
+              localStorage.setItem(NIGHT_KEY, next ? "1" : "0");
+            } catch (_) {}
+          });
+        }
+      })();
       // 完整離線單檔（舊流程）或 GitHub 內建 pack-data.js / pack-data-book2.js
       const OFFLINE_PACK = window.__BUBBLE_OFFLINE__ || null;
       const BUBBLE_PACK = window.__BUBBLE_PACK__ || null;
@@ -2491,6 +2701,7 @@
             k === STORAGE_KEY ||
             k === CLASSES_META_KEY ||
             k === SPEAK_LANG_KEY ||
+            k === NIGHT_KEY ||
             k.indexOf(STORAGE_KEY + "__") === 0 ||
             k.indexOf("char_bubble_board_") === 0
           ) {
@@ -2803,8 +3014,9 @@
             localStorage.setItem(k, mergeClassesMetaJson(localVal, remoteVal));
             return;
           }
-          if (k === SPEAK_LANG_KEY) {
+          if (k === SPEAK_LANG_KEY || k === NIGHT_KEY) {
             if (!localVal) localStorage.setItem(k, String(remoteVal));
+            if (k === NIGHT_KEY) applyNightMode(localStorage.getItem(NIGHT_KEY) === "1");
             return;
           }
           if (
