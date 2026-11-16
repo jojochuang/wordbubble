@@ -899,9 +899,13 @@
       </div>
       <div class="row-btns">
         <button type="button" class="pill primary" id="saveSetupBtn">儲存並開始</button>
+        <button type="button" class="pill ghost" id="exportProgressBtn">匯出進度備份</button>
+        <button type="button" class="pill ghost" id="importProgressBtn">匯入進度備份</button>
         <button type="button" class="pill ghost" id="exportYearOfflineBtn">匯出全年離線包</button>
         <button type="button" class="pill ghost" id="closeSetupBtn">關閉</button>
       </div>
+      <input type="file" id="importProgressFile" accept="application/json,.json" hidden />
+      <p class="hint" style="margin:10px 0 0;">兩台 iPad 進度各自存在本機 Safari。要一致：在 A 機「匯出進度備份」→ AirDrop／檔案傳到 B 機 → B 機「匯入進度備份」。</p>
       <p class="hint" id="offlineHint" hidden></p>
     </div>
   </div>
@@ -1212,6 +1216,9 @@
         classExamUrlInput: document.getElementById("classExamUrlInput"),
         saveSetupBtn: document.getElementById("saveSetupBtn"),
         exportYearOfflineBtn: document.getElementById("exportYearOfflineBtn"),
+        exportProgressBtn: document.getElementById("exportProgressBtn"),
+        importProgressBtn: document.getElementById("importProgressBtn"),
+        importProgressFile: document.getElementById("importProgressFile"),
         closeSetupBtn: document.getElementById("closeSetupBtn"),
         offlineHint: document.getElementById("offlineHint"),
         seatGrid: document.getElementById("seatGrid"),
@@ -2242,6 +2249,102 @@
           (les.reviewChars || []).forEach((c) => s.add(c));
         });
         return Array.from(s);
+      }
+
+      function collectProgressBackup() {
+        const keys = [];
+        for (let i = 0; i < localStorage.length; i++) {
+          const k = localStorage.key(i);
+          if (!k) continue;
+          if (
+            k === STORAGE_KEY ||
+            k === CLASSES_META_KEY ||
+            k === SPEAK_LANG_KEY ||
+            k.indexOf(STORAGE_KEY + "__") === 0 ||
+            k.indexOf("char_bubble_board_") === 0
+          ) {
+            keys.push(k);
+          }
+        }
+        const store = {};
+        keys.forEach((k) => {
+          store[k] = localStorage.getItem(k);
+        });
+        return {
+          app: "wordbubble",
+          version: 1,
+          exportedAt: new Date().toISOString(),
+          store: store,
+        };
+      }
+
+      function exportProgressBackup() {
+        try {
+          save();
+          saveClassesMeta();
+          const payload = collectProgressBackup();
+          const blob = new Blob([JSON.stringify(payload, null, 2)], {
+            type: "application/json",
+          });
+          const a = document.createElement("a");
+          const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
+          a.href = URL.createObjectURL(blob);
+          a.download = "wordbubble-progress-" + stamp + ".json";
+          document.body.appendChild(a);
+          a.click();
+          setTimeout(() => {
+            URL.revokeObjectURL(a.href);
+            a.remove();
+          }, 1500);
+          alert(
+            "已匯出進度備份（" +
+              Object.keys(payload.store).length +
+              " 筆）。\n用 AirDrop／「檔案」傳到另一台 iPad，再開設定 → 匯入進度備份。"
+          );
+        } catch (e) {
+          alert("匯出失敗：" + (e && e.message ? e.message : e));
+        }
+      }
+
+      function applyProgressBackup(payload) {
+        if (!payload || payload.app !== "wordbubble" || !payload.store || typeof payload.store !== "object") {
+          throw new Error("不是生字泡泡的進度備份檔");
+        }
+        const store = payload.store;
+        Object.keys(store).forEach((k) => {
+          if (store[k] == null) localStorage.removeItem(k);
+          else localStorage.setItem(k, String(store[k]));
+        });
+        loadClassesMeta();
+        load(classesMeta.activeClassId);
+        ensureSeatProgressKeys();
+        lessonCatalog = [];
+        examCatalog = [];
+        renderClassSwitch();
+        fillSetupForm();
+        renderAll();
+      }
+
+      async function importProgressBackupFromFile(file) {
+        if (!file) return;
+        const text = await file.text();
+        const payload = JSON.parse(text);
+        if (
+          !confirm(
+            "匯入會覆蓋本機現有班級與泡泡進度（以備份檔為準）。\n確定匯入「" +
+              (file.name || "備份") +
+              "」？"
+          )
+        ) {
+          return;
+        }
+        applyProgressBackup(payload);
+        alert("已匯入進度。兩台資料以這份備份為準；之後有新進度請再匯出傳一次。");
+        if (!OFFLINE_PACK) {
+          try {
+            await reloadLessons(true);
+          } catch (_) {}
+        }
       }
 
       async function exportOfflinePack(opts) {
@@ -4167,6 +4270,20 @@
       });
       if (els.exportYearOfflineBtn) {
         els.exportYearOfflineBtn.addEventListener("click", () => exportOfflinePack({ year: true }));
+      }
+      if (els.exportProgressBtn) {
+        els.exportProgressBtn.addEventListener("click", exportProgressBackup);
+      }
+      if (els.importProgressBtn && els.importProgressFile) {
+        els.importProgressBtn.addEventListener("click", () => els.importProgressFile.click());
+        els.importProgressFile.addEventListener("change", () => {
+          const f = els.importProgressFile.files && els.importProgressFile.files[0];
+          els.importProgressFile.value = "";
+          if (!f) return;
+          importProgressBackupFromFile(f).catch((e) =>
+            alert("匯入失敗：" + (e && e.message ? e.message : e))
+          );
+        });
       }
       if (els.reloadLessonsBtn) els.reloadLessonsBtn.addEventListener("click", () => reloadLessons(false));
       if (els.lessonSelect) {
