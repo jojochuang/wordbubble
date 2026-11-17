@@ -1,5 +1,5 @@
 /* 生字泡泡：快取主頁與內建筆順包 */
-const CACHE = "wordbubble-v20-char-dict-lesson-nav";
+const CACHE = "wordbubble-v21-char-dict-resume";
 const PRECACHE = [
   "./index.html",
   "./sw.js",

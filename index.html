@@ -1650,6 +1650,8 @@
           vocabHintsBySeat: {},
           // 聽寫斷點：{ "1": { "1週": { index, doneSlots, wordCount } } }
           vocabResumeBySeat: {},
+          // 生字聽寫斷點：{ "1": { "lessonId": { index, charCount, charKey } } }
+          charDictResumeBySeat: {},
         };
       }
 
@@ -1804,6 +1806,9 @@
         if (!state.vocabResumeBySeat || typeof state.vocabResumeBySeat !== "object") {
           state.vocabResumeBySeat = {};
         }
+        if (!state.charDictResumeBySeat || typeof state.charDictResumeBySeat !== "object") {
+          state.charDictResumeBySeat = {};
+        }
         if (data && Array.isArray(data.vocabHintedChars) && data.vocabHintedChars.length) {
           const sid = state.activeSeatId != null ? String(state.activeSeatId) : null;
           if (sid) mergeVocabHintedCharsForSeat(sid, data.vocabHintedChars);
@@ -1897,6 +1902,59 @@
           index: vocabSession.index,
           doneSlots: (vocabSession.doneSlots || []).map(Boolean),
           wordCount: (vocabSession.words || []).length,
+          updatedAt: Date.now(),
+        };
+        save();
+      }
+
+      function charDictLessonKey() {
+        return String(state.lessonId || "").trim() || "_lesson";
+      }
+
+      function charDictCharKey(chars) {
+        return (chars || []).join("\u0001");
+      }
+
+      function getCharDictResume(seatId, lessonKey, chars) {
+        if (seatId == null || !lessonKey) return null;
+        const bag =
+          state.charDictResumeBySeat && state.charDictResumeBySeat[String(seatId)];
+        const rec = bag && bag[lessonKey];
+        if (!rec || typeof rec !== "object") return null;
+        const list = Array.isArray(chars) ? chars : [];
+        if (Number(rec.charCount) !== list.length) return null;
+        if (String(rec.charKey || "") !== charDictCharKey(list)) return null;
+        const index = Math.max(0, Number(rec.index) || 0);
+        if (index >= list.length) return null;
+        return { index: index, charCount: list.length };
+      }
+
+      function clearCharDictResume(seatId, lessonKey) {
+        if (seatId == null || !lessonKey) return;
+        if (!state.charDictResumeBySeat || typeof state.charDictResumeBySeat !== "object") return;
+        const sid = String(seatId);
+        if (!state.charDictResumeBySeat[sid]) return;
+        delete state.charDictResumeBySeat[sid][lessonKey];
+        if (!Object.keys(state.charDictResumeBySeat[sid]).length) {
+          delete state.charDictResumeBySeat[sid];
+        }
+      }
+
+      function saveCharDictResumeFromSession() {
+        if (!charDictSession) return;
+        const seatId = charDictSession.seatId;
+        const lessonKey = charDictSession.lessonKey || charDictLessonKey();
+        if (seatId == null || !lessonKey) return;
+        if (!state.charDictResumeBySeat || typeof state.charDictResumeBySeat !== "object") {
+          state.charDictResumeBySeat = {};
+        }
+        const sid = String(seatId);
+        if (!state.charDictResumeBySeat[sid]) state.charDictResumeBySeat[sid] = {};
+        const chars = charDictSession.chars || [];
+        state.charDictResumeBySeat[sid][lessonKey] = {
+          index: Math.max(0, Number(charDictSession.index) || 0),
+          charCount: chars.length,
+          charKey: charDictCharKey(chars),
           updatedAt: Date.now(),
         };
         save();
@@ -3088,6 +3146,10 @@
           showMoe: true,
           vocabHintsBySeat: mergeVocabHints(L.vocabHintsBySeat, R.vocabHintsBySeat),
           vocabResumeBySeat: mergeVocabResume(L.vocabResumeBySeat, R.vocabResumeBySeat),
+          charDictResumeBySeat: mergeVocabResume(
+            L.charDictResumeBySeat,
+            R.charDictResumeBySeat
+          ),
         };
       }
 
@@ -4116,6 +4178,7 @@
         state.giftsClaimed = remapSeatKeyedObject(state.giftsClaimed, idMap);
         state.vocabHintsBySeat = remapSeatKeyedObject(state.vocabHintsBySeat, idMap);
         state.vocabResumeBySeat = remapSeatKeyedObject(state.vocabResumeBySeat, idMap);
+        state.charDictResumeBySeat = remapSeatKeyedObject(state.charDictResumeBySeat, idMap);
         if (state.activeSeatId != null) {
           const mapped = idMap[String(state.activeSeatId)];
           state.activeSeatId = mapped != null ? mapped : null;
@@ -5059,11 +5122,18 @@
           const seat = activeSeat();
           const who = seat ? seatLabel(seat) : "這位學生";
           if (kind === "charDict") {
+            const resumeNote =
+              opts && opts.resumeIndex != null
+                ? "下次按「生字聽寫」會從第 " +
+                  (Number(opts.resumeIndex) + 1) +
+                  " 字繼續。"
+                : "";
             els.vocabSummaryHint.textContent = list.length
               ? "本輪曾用「顯示底圖」或「提示下一筆」的字如下；只會把「" +
                 who +
-                "」的對應泡泡先變成粉紅色，其他學生不變。之後練習變色規則不變。"
-              : "本輪沒有使用底圖或下一筆提示。可以直接回到泡泡練習。";
+                "」的對應泡泡先變成粉紅色，其他學生不變。之後練習變色規則不變。" +
+                (resumeNote ? " " + resumeNote : "")
+              : (resumeNote || "本輪沒有使用底圖或下一筆提示。可以直接回到泡泡練習。");
           } else {
             els.vocabSummaryHint.textContent = list.length
               ? "本輪曾用 📖 查看筆順的字如下；只會把「" +
@@ -5103,13 +5173,21 @@
           alert("請先結束語詞聽寫再開始生字聽寫。");
           return;
         }
+        const lessonKey = charDictLessonKey();
+        const resume = getCharDictResume(seat.id, lessonKey, list);
+        let startIndex = 0;
+        if (resume) {
+          startIndex = Math.min(resume.index, list.length - 1);
+        }
         charDictSession = {
           seatId: seat.id,
+          lessonKey: lessonKey,
           chars: list,
-          index: 0,
+          index: startIndex,
           hintedChars: new Set(),
         };
-        openWrite(list[0], { type: "charDict", index: 0 });
+        saveCharDictResumeFromSession();
+        openWrite(list[startIndex], { type: "charDict", index: startIndex });
       }
 
       function onCharDictComplete(ch, helped) {
@@ -5125,10 +5203,12 @@
           finishCharDictation({ completed: true });
           return;
         }
+        saveCharDictResumeFromSession();
         openWrite(next, { type: "charDict", index: charDictSession.index });
       }
 
       function finishCharDictation(opts) {
+        const completed = !!(opts && opts.completed);
         const hinted =
           charDictSession && charDictSession.hintedChars
             ? Array.from(charDictSession.hintedChars)
@@ -5137,10 +5217,22 @@
           charDictSession && charDictSession.seatId != null
             ? charDictSession.seatId
             : activeSeat() && activeSeat().id;
+        const lessonKey =
+          (charDictSession && charDictSession.lessonKey) || charDictLessonKey();
         if (seatId != null) mergeVocabHintedCharsForSeat(seatId, hinted);
+        let resumeIndex = null;
+        if (completed) {
+          clearCharDictResume(seatId, lessonKey);
+        } else if (charDictSession) {
+          resumeIndex = Math.max(0, Number(charDictSession.index) || 0);
+          saveCharDictResumeFromSession();
+        }
         save();
         charDictSession = null;
-        showVocabHintSummary(hinted, { kind: "charDict" });
+        showVocabHintSummary(hinted, {
+          kind: "charDict",
+          resumeIndex: completed ? null : resumeIndex,
+        });
         renderAll();
       }
 
