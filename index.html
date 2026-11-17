@@ -905,6 +905,31 @@
       border-color: #16324f;
       color: #fff;
     }
+    .moe-speak-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      padding: 8px 10px 0;
+      box-sizing: border-box;
+    }
+    .moe-speak-btn {
+      min-width: 44px;
+      min-height: 44px;
+      padding: 8px 14px;
+      font-size: 1.25rem;
+      line-height: 1;
+    }
+    .moe-speak-btn[disabled] {
+      opacity: 0.55;
+      cursor: wait;
+    }
+    .moe-speak-row .voice-mode-btn {
+      padding: 6px 10px;
+      font-size: 0.82rem;
+    }
     .night-toggle {
       padding: 6px 10px;
       border-radius: 999px;
@@ -1305,6 +1330,14 @@
           </div>
         </div>
         <div class="moe-box" id="moeBox" hidden>
+          <div class="moe-speak-row" id="moeSpeakRow">
+            <button type="button" class="pill primary moe-speak-btn" id="moeSpeakBtn" title="朗讀生字與語詞" aria-label="朗讀生字與語詞">🔊</button>
+            <span class="voice-mode-controls" id="moeVoiceMode" title="發音語言">
+              <button type="button" class="voice-mode-btn active" data-mode="zh">中文</button>
+              <button type="button" class="voice-mode-btn" data-mode="yue">廣東話</button>
+              <button type="button" class="voice-mode-btn" data-mode="both">中＋粵</button>
+            </span>
+          </div>
           <div class="moe-demo-host" id="moeDemoHost" aria-label="筆順示範"></div>
           <div class="moe-demo-controls">
             <button type="button" class="pill primary" id="moePlayBtn">播放</button>
@@ -1359,6 +1392,10 @@
       const EXAM_SHEET_ID = "1PWGAxP2QEcfb3Aj3m7S-SWVqrxpI3Y3ywhkXcaxv9Ko";
       const EXAM_GID = "1975515821";
       const EXAM_GID_BOOK2 = "1515989355";
+      // 國小高頻語詞（A＝字，G 欄起為語詞）— 朗讀生字時隨機抽兩個相關語詞
+      const WORD_SHEET_ID = "17bjNhzlQH43hE3k27ZzRVLZYX3Vt1vEqQXSncy2ADI4";
+      const WORD_GID = "1950889734";
+      const WORD_COL_START = 6; // G 欄
       const SPEAK_LANG_KEY = "dictation_exam_speak_lang";
       const NIGHT_KEY = "wordbubble_night";
       const GIFT_EMOJIS = ["🎁", "🌟", "🦄", "🍭", "🎈", "🦊", "🌈", "🏆"];
@@ -1523,6 +1560,8 @@
         moeNextBtn: document.getElementById("moeNextBtn"),
         moeReplayBtn: document.getElementById("moeReplayBtn"),
         moeSpeedSelect: document.getElementById("moeSpeedSelect"),
+        moeSpeakBtn: document.getElementById("moeSpeakBtn"),
+        moeVoiceMode: document.getElementById("moeVoiceMode"),
         giftEmoji: document.getElementById("giftEmoji"),
         giftTitle: document.getElementById("giftTitle"),
         giftText: document.getElementById("giftText"),
@@ -1549,6 +1588,12 @@
         const saved = localStorage.getItem(SPEAK_LANG_KEY);
         if (saved === "zh" || saved === "yue" || saved === "both") speakLangMode = saved;
       } catch (_) {}
+      /** @type {Map<string, string[]>|null} 字 → 該列 G 欄起語詞（漢字） */
+      let wordSheetByChar = null;
+      /** @type {Map<string, string[]>|null} 字 → 含該字的語詞（全表備援） */
+      let wordSheetByContain = null;
+      let wordSheetLoading = null;
+      let speakSeqToken = 0;
 
       function defaultState() {
         return {
@@ -4344,6 +4389,9 @@
         destroyMoeDemo();
         els.writeOverlay.hidden = false;
         destroyQuiz();
+        if (showMoe) {
+          ensureWordSheet().catch(() => {});
+        }
 
         const size = Math.min(420, Math.floor(window.innerWidth * 0.86), Math.floor(window.innerHeight * 0.52));
         els.hanziTarget.style.width = size + "px";
@@ -4371,6 +4419,7 @@
       }
 
       function closeWrite() {
+        cancelSpeech();
         destroyQuiz();
         destroyMoeDemo();
         els.writeOverlay.hidden = true;
@@ -4448,30 +4497,179 @@
         return new Promise((resolve) => setTimeout(resolve, ms));
       }
 
-      /** 中文／廣東話／先中文再廣東話（與聽寫語詞考試相同） */
-      function speakVocab(text) {
-        const t = extractHanOrdered(text).join("");
-        if (!t) return;
+      function cancelSpeech() {
+        speakSeqToken++;
         if (!("speechSynthesis" in window)) return;
         try {
           window.speechSynthesis.cancel();
         } catch (_) {}
+      }
+
+      /** 依目前語音模式朗讀一段（不 cancel；供序列呼叫） */
+      async function speakTextInMode(text, token) {
+        const t = extractHanOrdered(text).join("");
+        if (!t) return;
+        if (!("speechSynthesis" in window)) return;
+        if (token != null && token !== speakSeqToken) return;
         const mode = speakLangMode;
         const vZh = pickVoiceZh();
         const vYue = pickVoiceYue() || vZh;
-        (async () => {
-          if (mode === "zh" || mode === "both") {
-            await speakOnce(t, "zh-TW", vZh);
+        if (mode === "zh" || mode === "both") {
+          if (token != null && token !== speakSeqToken) return;
+          await speakOnce(t, "zh-TW", vZh);
+        }
+        if (mode === "both") {
+          if (token != null && token !== speakSeqToken) return;
+          await delayMs(400);
+        }
+        if (mode === "yue" || mode === "both") {
+          if (token != null && token !== speakSeqToken) return;
+          await speakOnce(t, "zh-HK", vYue);
+        }
+      }
+
+      /** 中文／廣東話／先中文再廣東話（與聽寫語詞考試相同） */
+      function speakVocab(text) {
+        if (!extractHanOrdered(text).join("")) return;
+        cancelSpeech();
+        const token = speakSeqToken;
+        speakTextInMode(text, token);
+      }
+
+      function tokenizeWordCell(cell) {
+        return String(cell || "")
+          .replace(/\r/g, "\n")
+          .split(/[\n,，、；;]+/g)
+          .map((s) =>
+            s
+              .replace(/\([^)]*\)/g, "")
+              .replace(/（[^）]*）/g, "")
+              .replace(/[0-9０-９]+/g, "")
+              .trim()
+          )
+          .map((s) => extractHanOrdered(s).join(""))
+          .filter((s) => s.length >= 2);
+      }
+
+      function buildWordSheetIndex(rows) {
+        const byChar = new Map();
+        const byContain = new Map();
+        const start = rows.length && String(rows[0][0] || "").includes("排序") ? 1 : 0;
+        for (let i = start; i < rows.length; i++) {
+          const r = rows[i] || [];
+          const head = extractHanOrdered(r[0] || "").join("");
+          if (!head || head.length !== 1) continue;
+          const rowWords = [];
+          const seen = new Set();
+          for (let c = WORD_COL_START; c < r.length; c++) {
+            tokenizeWordCell(r[c]).forEach((w) => {
+              if (seen.has(w)) return;
+              seen.add(w);
+              rowWords.push(w);
+            });
           }
-          if (mode === "both") await delayMs(400);
-          if (mode === "yue" || mode === "both") {
-            await speakOnce(t, "zh-HK", vYue);
+          if (rowWords.length) {
+            const prev = byChar.get(head) || [];
+            byChar.set(head, prev.concat(rowWords));
           }
-        })();
+          rowWords.forEach((w) => {
+            for (const ch of w) {
+              if (!byContain.has(ch)) byContain.set(ch, []);
+              const list = byContain.get(ch);
+              if (list.indexOf(w) < 0) list.push(w);
+            }
+          });
+        }
+        wordSheetByChar = byChar;
+        wordSheetByContain = byContain;
+      }
+
+      async function ensureWordSheet() {
+        if (wordSheetByChar && wordSheetByContain) return;
+        if (wordSheetLoading) return wordSheetLoading;
+        wordSheetLoading = (async () => {
+          const rows = await fetchSheetRows(WORD_SHEET_ID, WORD_GID);
+          buildWordSheetIndex(rows || []);
+        })()
+          .catch((e) => {
+            wordSheetByChar = new Map();
+            wordSheetByContain = new Map();
+            throw e;
+          })
+          .finally(() => {
+            wordSheetLoading = null;
+          });
+        return wordSheetLoading;
+      }
+
+      function shuffleCopy(arr) {
+        const a = arr.slice();
+        for (let i = a.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          const t = a[i];
+          a[i] = a[j];
+          a[j] = t;
+        }
+        return a;
+      }
+
+      /** 抽兩個含該生字的語詞：優先該字列，不足再從全表含字語詞補 */
+      function pickTwoWordsForChar(ch) {
+        const c = String(ch || "").trim();
+        if (!c) return [];
+        const primary = (wordSheetByChar && wordSheetByChar.get(c)) || [];
+        const fallback = (wordSheetByContain && wordSheetByContain.get(c)) || [];
+        const picked = [];
+        const used = new Set();
+        shuffleCopy(primary).forEach((w) => {
+          if (picked.length >= 2) return;
+          if (used.has(w) || !w.includes(c)) return;
+          used.add(w);
+          picked.push(w);
+        });
+        if (picked.length < 2) {
+          shuffleCopy(fallback).forEach((w) => {
+            if (picked.length >= 2) return;
+            if (used.has(w) || !w.includes(c)) return;
+            used.add(w);
+            picked.push(w);
+          });
+        }
+        return picked;
+      }
+
+      async function speakCharWithWords(ch) {
+        const c = String(ch || "").trim();
+        if (!c) return;
+        if (!("speechSynthesis" in window)) {
+          alert("此裝置不支援語音朗讀");
+          return;
+        }
+        const btn = els.moeSpeakBtn;
+        if (btn) btn.disabled = true;
+        try {
+          try {
+            await ensureWordSheet();
+          } catch (_) {
+            /* 沒語詞表仍朗讀生字 */
+          }
+          const words = pickTwoWordsForChar(c);
+          cancelSpeech();
+          const token = speakSeqToken;
+          await speakTextInMode(c, token);
+          for (let i = 0; i < words.length; i++) {
+            if (token !== speakSeqToken) return;
+            await delayMs(450);
+            if (token !== speakSeqToken) return;
+            await speakTextInMode(words[i], token);
+          }
+        } finally {
+          if (btn) btn.disabled = false;
+        }
       }
 
       function syncVocabVoiceButtons() {
-        [els.vocabVoiceModeSetup, els.vocabVoiceModePlay].forEach((wrap) => {
+        [els.vocabVoiceModeSetup, els.vocabVoiceModePlay, els.moeVoiceMode].forEach((wrap) => {
           if (!wrap) return;
           wrap.querySelectorAll(".voice-mode-btn").forEach((btn) => {
             btn.classList.toggle("active", btn.getAttribute("data-mode") === speakLangMode);
@@ -4491,7 +4689,7 @@
           } catch (_) {}
           syncVocabVoiceButtons();
         };
-        [els.vocabVoiceModeSetup, els.vocabVoiceModePlay].forEach((wrap) => {
+        [els.vocabVoiceModeSetup, els.vocabVoiceModePlay, els.moeVoiceMode].forEach((wrap) => {
           if (wrap) wrap.addEventListener("click", onClick);
         });
         syncVocabVoiceButtons();
@@ -5235,6 +5433,12 @@
       if (els.moeReplayBtn) {
         els.moeReplayBtn.addEventListener("click", () => {
           if (moeDemo) moeDemo.replay();
+        });
+      }
+      if (els.moeSpeakBtn) {
+        els.moeSpeakBtn.addEventListener("click", () => {
+          if (!writingChar) return;
+          speakCharWithWords(writingChar);
         });
       }
 
