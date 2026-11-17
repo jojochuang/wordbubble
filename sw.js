@@ -1,11 +1,12 @@
 /* 生字泡泡：快取主頁與內建筆順包 */
-const CACHE = "wordbubble-v22-lesson-nav-tight";
+const CACHE = "wordbubble-v23-dictation-cheer";
 const PRECACHE = [
   "./index.html",
   "./sw.js",
   "./pack-data.js",
   "./pack-data-book2.js",
   "./char_bubble.webmanifest",
+  "./dictation-heart.gif",
 ];
 
 self.addEventListener("install", (event) => {
