@@ -1449,6 +1449,8 @@
       const WORD_COL_START = 6; // G 欄
       const SPEAK_LANG_KEY = "dictation_exam_speak_lang";
       const NIGHT_KEY = "wordbubble_night";
+      const BOOK2_UNLOCK_KEY = "wordbubble_book2_unlock";
+      const BOOK2_PASSWORD = "CREC";
       const GIFT_EMOJIS = ["🎁", "🌟", "🦄", "🍭", "🎈", "🦊", "🌈", "🏆"];
 
       function applyNightMode(on) {
@@ -2543,8 +2545,32 @@
         renderClassSwitch();
       }
 
+      function isBook2Unlocked() {
+        try {
+          return localStorage.getItem(BOOK2_UNLOCK_KEY) === "1";
+        } catch (_) {
+          return false;
+        }
+      }
+
+      /** 美洲二冊需密碼 CREC；通過一次後本機記住，不必每次輸入 */
+      function ensureBook2Access() {
+        if (isBook2Unlocked()) return true;
+        const pw = window.prompt("美洲二冊尚未開放，請輸入密碼：");
+        if (pw == null) return false;
+        if (String(pw).trim() === BOOK2_PASSWORD) {
+          try {
+            localStorage.setItem(BOOK2_UNLOCK_KEY, "1");
+          } catch (_) {}
+          return true;
+        }
+        alert("密碼不正確");
+        return false;
+      }
+
       async function switchClass(classId) {
         if (!classId || classId === classesMeta.activeClassId) return;
+        if (classId === BOOK2_CLASS_ID && !ensureBook2Access()) return;
         save();
         classesMeta.activeClassId = classId;
         saveClassesMeta();
@@ -2961,6 +2987,7 @@
             k === CLASSES_META_KEY ||
             k === SPEAK_LANG_KEY ||
             k === NIGHT_KEY ||
+            k === BOOK2_UNLOCK_KEY ||
             k.indexOf(STORAGE_KEY + "__") === 0 ||
             k.indexOf("char_bubble_board_") === 0
           ) {
@@ -3277,7 +3304,7 @@
             localStorage.setItem(k, mergeClassesMetaJson(localVal, remoteVal));
             return;
           }
-          if (k === SPEAK_LANG_KEY || k === NIGHT_KEY) {
+          if (k === SPEAK_LANG_KEY || k === NIGHT_KEY || k === BOOK2_UNLOCK_KEY) {
             if (!localVal) localStorage.setItem(k, String(remoteVal));
             if (k === NIGHT_KEY) applyNightMode(localStorage.getItem(NIGHT_KEY) === "1");
             return;
