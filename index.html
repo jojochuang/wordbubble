@@ -74,11 +74,12 @@
       line-height: 1.1;
     }
     .lesson-nav {
-      display: flex;
+      display: inline-flex;
       align-items: center;
       gap: 6px;
       min-width: 0;
       max-width: 100%;
+      width: fit-content;
     }
     .lesson-nav-btn {
       flex: 0 0 auto;
@@ -92,7 +93,8 @@
       overflow: hidden;
       text-overflow: ellipsis;
       min-width: 0;
-      flex: 1 1 auto;
+      flex: 0 1 auto;
+      max-width: min(52vw, 28rem);
     }
     .moe-box.speak-only .moe-demo-panel {
       display: none !important;
