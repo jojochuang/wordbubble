@@ -65,6 +65,7 @@
       flex-direction: column;
       gap: 2px;
       min-width: 0;
+      flex: 1 1 auto;
     }
     .brand h1 {
       margin: 0;
@@ -72,12 +73,32 @@
       font-weight: 700;
       line-height: 1.1;
     }
+    .lesson-nav {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      min-width: 0;
+      max-width: 100%;
+    }
+    .lesson-nav-btn {
+      flex: 0 0 auto;
+      padding: 6px 10px;
+      font-size: 0.78rem;
+    }
     .brand .sub {
       font-size: 0.82rem;
       color: var(--muted);
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
+      min-width: 0;
+      flex: 1 1 auto;
+    }
+    .moe-box.speak-only .moe-demo-panel {
+      display: none !important;
+    }
+    .moe-box.speak-only {
+      max-width: min(420px, 100%);
     }
     .top-actions {
       display: flex;
@@ -1122,11 +1143,16 @@
   <header class="topbar">
     <div class="brand">
       <h1 class="display">生字泡泡</h1>
-      <div class="sub" id="classSub">先設定課次與當週生字</div>
+      <div class="lesson-nav" id="lessonNav">
+        <button type="button" class="pill ghost lesson-nav-btn" id="prevLessonBtn" title="上一課">上一課</button>
+        <div class="sub" id="classSub">先設定課次與當週生字</div>
+        <button type="button" class="pill ghost lesson-nav-btn" id="nextLessonBtn" title="下一課">下一課</button>
+      </div>
     </div>
     <div class="top-actions">
       <button type="button" class="night-toggle" id="nightToggle" title="夜覽／日間（黑底減少藍光）">夜覽</button>
       <button type="button" class="seat-now empty" id="seatNowBtn" title="選擇座號">請先選座號</button>
+      <button type="button" class="pill ghost" id="charDictBtn">生字聽寫</button>
       <button type="button" class="pill ghost" id="vocabExamBtn">語詞聽寫</button>
       <button type="button" class="pill ghost" id="setupBtn">設定</button>
     </div>
@@ -1338,23 +1364,25 @@
               <button type="button" class="voice-mode-btn" data-mode="both">中＋粵</button>
             </span>
           </div>
-          <div class="moe-demo-host" id="moeDemoHost" aria-label="筆順示範"></div>
-          <div class="moe-demo-controls">
-            <button type="button" class="pill primary" id="moePlayBtn">播放</button>
-            <button type="button" class="pill ghost" id="moeNextBtn">下一筆</button>
-            <button type="button" class="pill ghost" id="moeReplayBtn">重播</button>
-            <label>速度
-              <select id="moeSpeedSelect" aria-label="示範速度">
-                <option value="slow">慢</option>
-                <option value="medium">中</option>
-                <option value="fast" selected>快</option>
-              </select>
-            </label>
-          </div>
-          <div class="moe-credit">
-            本機筆順示範；書寫方向參考
-            <a href="https://stroke-order.learningweb.moe.edu.tw/" target="_blank" rel="noopener noreferrer">教育部筆順學習網</a>
-            Track 軌跡（非商業教學）。預設靜止，請按「播放」。
+          <div class="moe-demo-panel" id="moeDemoPanel">
+            <div class="moe-demo-host" id="moeDemoHost" aria-label="筆順示範"></div>
+            <div class="moe-demo-controls">
+              <button type="button" class="pill primary" id="moePlayBtn">播放</button>
+              <button type="button" class="pill ghost" id="moeNextBtn">下一筆</button>
+              <button type="button" class="pill ghost" id="moeReplayBtn">重播</button>
+              <label>速度
+                <select id="moeSpeedSelect" aria-label="示範速度">
+                  <option value="slow">慢</option>
+                  <option value="medium">中</option>
+                  <option value="fast" selected>快</option>
+                </select>
+              </label>
+            </div>
+            <div class="moe-credit">
+              本機筆順示範；書寫方向參考
+              <a href="https://stroke-order.learningweb.moe.edu.tw/" target="_blank" rel="noopener noreferrer">教育部筆順學習網</a>
+              Track 軌跡（非商業教學）。預設靜止，請按「播放」。
+            </div>
           </div>
         </div>
       </div>
@@ -1480,9 +1508,14 @@
 
       const els = {
         classSub: document.getElementById("classSub"),
+        prevLessonBtn: document.getElementById("prevLessonBtn"),
+        nextLessonBtn: document.getElementById("nextLessonBtn"),
         seatNowBtn: document.getElementById("seatNowBtn"),
+        charDictBtn: document.getElementById("charDictBtn"),
         vocabExamBtn: document.getElementById("vocabExamBtn"),
         setupBtn: document.getElementById("setupBtn"),
+        writeTitle: document.getElementById("writeTitle"),
+        moeDemoPanel: document.getElementById("moeDemoPanel"),
         pickSeatBtn: document.getElementById("pickSeatBtn"),
         classSwitchList: document.getElementById("classSwitchList"),
         addClassBtn: document.getElementById("addClassBtn"),
@@ -1493,6 +1526,7 @@
         newClassSaveBtn: document.getElementById("newClassSaveBtn"),
         newClassCancelBtn: document.getElementById("newClassCancelBtn"),
         vocabExamOverlay: document.getElementById("vocabExamOverlay"),
+        vocabExamTitle: document.getElementById("vocabExamTitle"),
         vocabSetupPanel: document.getElementById("vocabSetupPanel"),
         vocabPlayPanel: document.getElementById("vocabPlayPanel"),
         vocabLessonSelect: document.getElementById("vocabLessonSelect"),
@@ -1577,10 +1611,12 @@
       let quizActive = false;
       let moeDemo = null;
       let practiceUsedOutline = false;
+      let practiceUsedHint = false;
       let measuringPath = null;
       let lessonCatalog = [];
       let examCatalog = [];
       let vocabSession = null;
+      let charDictSession = null;
       let vocabHintDemo = null;
       let vocabHintChar = "";
       let speakLangMode = "zh"; // zh | yue | both
@@ -2210,6 +2246,101 @@
         if (!id) return;
         const les = lessonCatalog.find((x) => x.id === id);
         if (les) applyLessonToForm(les);
+      }
+
+      function currentLessonIndex() {
+        if (!state.lessonId || !lessonCatalog.length) return -1;
+        return lessonCatalog.findIndex((x) => x.id === state.lessonId);
+      }
+
+      /** 頂欄上一課／下一課：切換課次並帶入生字（保留座號與可沿用進度） */
+      function applyLessonQuick(les) {
+        if (!les) return;
+        const newChars = Array.isArray(les.newChars) ? les.newChars.slice() : [];
+        const reviewChars = Array.isArray(les.reviewChars) ? les.reviewChars.slice() : [];
+        const chars = buildActiveChars(newChars, reviewChars, true);
+        if (!chars.length) {
+          alert("這一課沒有生字／複習字。");
+          return;
+        }
+        const oldProgress = state.progress || {};
+        const oldGifts = state.giftsClaimed || {};
+        state.lessonId = les.id || "";
+        state.lessonName = les.name || "";
+        state.newChars = newChars;
+        state.reviewChars = reviewChars;
+        state.includeReview = true;
+        state.chars = chars;
+        if (state.vocabHintsBySeat && typeof state.vocabHintsBySeat === "object") {
+          Object.keys(state.vocabHintsBySeat).forEach((sid) => {
+            const list = state.vocabHintsBySeat[sid];
+            if (!Array.isArray(list)) {
+              delete state.vocabHintsBySeat[sid];
+              return;
+            }
+            state.vocabHintsBySeat[sid] = list.filter((c) => chars.indexOf(c) >= 0);
+          });
+        }
+        state.progress = {};
+        state.giftsClaimed = {};
+        (state.seats || []).forEach((s) => {
+          const k = String(s.id);
+          const prevRaw = oldProgress[k];
+          const prevMap = Array.isArray(prevRaw)
+            ? (() => {
+                const m = {};
+                prevRaw.forEach((c) => {
+                  if (c) m[c] = { freehand: 1, outline: false };
+                });
+                return m;
+              })()
+            : prevRaw && typeof prevRaw === "object"
+              ? prevRaw
+              : {};
+          const nextMap = {};
+          Object.keys(prevMap).forEach((c) => {
+            if (chars.includes(c)) nextMap[c] = normalizeCharRecord(prevMap[c]);
+          });
+          state.progress[k] = nextMap;
+          const doneCount = Object.keys(nextMap).filter((c) => isCharPracticed(nextMap[c])).length;
+          if (oldGifts[k] && doneCount === chars.length && chars.length > 0) {
+            state.giftsClaimed[k] = true;
+          }
+        });
+        ensureSeatProgressKeys();
+        if (els.lessonSelect) els.lessonSelect.value = les.id || "";
+        applyLessonToForm(les);
+        save();
+        renderAll();
+        prefetchWeekChars(state.chars, null);
+      }
+
+      async function switchLessonByOffset(delta) {
+        try {
+          if (!lessonCatalog.length) await reloadLessons(true);
+        } catch (e) {
+          alert((e && e.message) || "課次載入失敗");
+          return;
+        }
+        if (!lessonCatalog.length) {
+          alert("尚無課次，請先在設定載入試算表。");
+          openSetup();
+          return;
+        }
+        let idx = currentLessonIndex();
+        if (idx < 0) idx = delta > 0 ? 0 : 0;
+        else idx = Math.max(0, Math.min(lessonCatalog.length - 1, idx + delta));
+        const les = lessonCatalog[idx];
+        if (!les) return;
+        if (les.id === state.lessonId) {
+          if (delta < 0 && idx === 0) {
+            /* 已是第一課 */
+          } else if (delta > 0 && idx === lessonCatalog.length - 1) {
+            /* 已是最後一課 */
+          }
+          return;
+        }
+        applyLessonQuick(les);
       }
 
       async function reloadLessons(selectCurrent) {
@@ -4216,6 +4347,15 @@
           (n
             ? "｜" + n + " 字" + (nRev ? "（新 " + nNew + "＋複 " + nRev + "）" : "")
             : "");
+        const idx = currentLessonIndex();
+        const hasCat = lessonCatalog.length > 0;
+        if (els.prevLessonBtn) {
+          els.prevLessonBtn.disabled = !hasCat || idx <= 0;
+        }
+        if (els.nextLessonBtn) {
+          els.nextLessonBtn.disabled =
+            !hasCat || (idx >= 0 && idx >= lessonCatalog.length - 1);
+        }
         const seat = activeSeat();
         if (seat) {
           els.seatNowBtn.classList.remove("empty");
@@ -4278,7 +4418,7 @@
             levelLabel = "有底圖完成";
           } else if (hinted) {
             btn.classList.add("level-hint");
-            levelLabel = "聽寫曾看筆順";
+            levelLabel = "聽寫曾用提示";
           }
           btn.setAttribute(
             "aria-label",
@@ -4314,11 +4454,21 @@
         if (els.hanziTarget) els.hanziTarget.innerHTML = "";
       }
 
+      function usedWriteHelp() {
+        return (
+          practiceUsedOutline ||
+          practiceUsedHint ||
+          !!(els.outlineNowCheck && els.outlineNowCheck.checked) ||
+          !!(els.hintStrokeCheck && els.hintStrokeCheck.checked)
+        );
+      }
+
       function startQuiz(strokes, medians, source) {
         if (!writingChar || !strokes || !strokes.length) return;
         destroyQuiz();
         quizActive = true;
         practiceUsedOutline = !!els.outlineNowCheck.checked;
+        practiceUsedHint = !!(els.hintStrokeCheck && els.hintStrokeCheck.checked);
         els.writeMsg.textContent = medians
           ? source && String(source).indexOf("moe") >= 0
             ? "請依教育部筆順一筆一筆寫；寫錯會清掉那一筆。"
@@ -4344,8 +4494,21 @@
               els.writeMsg.className = "write-msg ok";
               const ctx = writeContext;
               setTimeout(() => {
-                closeWrite();
+                closeWrite({ skipCharDictFinish: true });
                 onVocabCharComplete(ctx);
+              }, 450);
+              return;
+            }
+            if (writeContext && writeContext.type === "charDict") {
+              const helped = usedWriteHelp();
+              els.writeMsg.textContent = helped
+                ? "寫對了（有用提示／底圖，結束後泡泡會變粉）"
+                : "寫對了！";
+              els.writeMsg.className = "write-msg ok";
+              const chDone = writingChar;
+              setTimeout(() => {
+                closeWrite({ skipCharDictFinish: true });
+                onCharDictComplete(chDone, helped);
               }, 450);
               return;
             }
@@ -4363,7 +4526,7 @@
             }
             els.writeMsg.className = "write-msg ok";
             setTimeout(() => {
-              closeWrite();
+              closeWrite({ skipCharDictFinish: true });
               renderAll();
               maybeGift(seat);
             }, 550);
@@ -4375,24 +4538,50 @@
         writingChar = ch;
         writeContext = ctx || { type: "bubble" };
         practiceUsedOutline = false;
+        practiceUsedHint = false;
         els.writeMsg.textContent = "載入筆順中…";
         els.writeMsg.className = "write-msg";
-        const isVocab = writeContext.type === "vocab";
-        // 語詞聽寫：底圖／提示預設不勾；不顯示右側筆順動畫
-        // 底圖／提示預設一律不勾；語詞聽寫不顯示右側筆順（用 📖）；泡泡練習一律本機右側筆順
+        const mode = writeContext.type || "bubble";
+        const isVocab = mode === "vocab";
+        const isCharDict = mode === "charDict";
+        // 語詞聽寫：不顯示右側筆順／喇叭（用 📖）
+        // 生字聽寫：喇叭＋語音，不顯示筆順動畫
+        // 泡泡練習：喇叭＋筆順動畫
         els.outlineNowCheck.checked = false;
         if (els.hintStrokeCheck) els.hintStrokeCheck.checked = false;
-        const showMoe = !isVocab;
-        if (els.moeBox) els.moeBox.hidden = !showMoe;
-        if (els.writeLayout) els.writeLayout.classList.toggle("has-moe", showMoe);
+        const showSpeak = !isVocab;
+        const showMoeDemo = mode === "bubble";
+        const showMoeSide = showSpeak;
+        if (els.moeBox) {
+          els.moeBox.hidden = !showMoeSide;
+          els.moeBox.classList.toggle("speak-only", showSpeak && !showMoeDemo);
+        }
+        if (els.writeLayout) els.writeLayout.classList.toggle("has-moe", showMoeSide);
+        if (els.writeTitle) {
+          if (isCharDict && charDictSession) {
+            const n = charDictSession.chars.length;
+            const i = Math.min(charDictSession.index, n - 1) + 1;
+            els.writeTitle.textContent = "生字聽寫（" + i + " / " + n + "）";
+          } else if (isVocab) {
+            els.writeTitle.textContent = "寫出這個字";
+          } else {
+            els.writeTitle.textContent = "依筆順寫出這個字";
+          }
+        }
+        if (els.writeHint) {
+          els.writeHint.textContent = isCharDict
+            ? "聽寫時不顯示筆順動畫。聽完喇叭後書寫；若用了「顯示底圖」或「提示下一筆」，結束後該字泡泡會變粉。"
+            : isVocab
+              ? "用 Pencil／手指一筆一筆寫。寫錯那一筆會消失，必須寫對才可寫下一筆。"
+              : "用 Pencil／手指一筆一筆寫。寫錯那一筆會消失，必須寫對才可寫下一筆。全部寫完才消泡泡。";
+        }
         applyWriteHandLayout();
         destroyMoeDemo();
         els.writeOverlay.hidden = false;
         destroyQuiz();
         cancelSpeech();
-        if (showMoe) {
+        if (showSpeak) {
           ensureWordSheet().catch(() => {});
-          // 進入練習寫字畫面就朗讀生字＋兩個語詞（喇叭仍可再聽一次）
           setTimeout(() => {
             if (writingChar === ch && writeContext && writeContext.type !== "vocab") {
               speakCharWithWords(ch);
@@ -4403,7 +4592,7 @@
         const size = Math.min(420, Math.floor(window.innerWidth * 0.86), Math.floor(window.innerHeight * 0.52));
         els.hanziTarget.style.width = size + "px";
         els.hanziTarget.style.height = size + "px";
-        if (els.moeDemoHost) {
+        if (els.moeDemoHost && showMoeDemo) {
           els.moeDemoHost.style.width = size + "px";
           els.moeDemoHost.style.height = size + "px";
           els.moeDemoHost.style.maxHeight = "none";
@@ -4413,7 +4602,7 @@
           .then((data) => {
             if (writingChar !== ch) return;
             startQuiz(data.strokes, data.medians || null, data.source);
-            if (showMoe) startMoeDemo(data.strokes, data.medians || null, ch);
+            if (showMoeDemo) startMoeDemo(data.strokes, data.medians || null, ch);
           })
           .catch((e) => {
             els.writeMsg.textContent =
@@ -4425,13 +4614,27 @@
           });
       }
 
-      function closeWrite() {
+      function closeWrite(opts) {
+        const finishCharDict =
+          !(opts && opts.skipCharDictFinish) &&
+          writeContext &&
+          writeContext.type === "charDict" &&
+          charDictSession;
+        const pendingHelpChar =
+          finishCharDict && writingChar && usedWriteHelp() ? writingChar : "";
         cancelSpeech();
         destroyQuiz();
         destroyMoeDemo();
         els.writeOverlay.hidden = true;
         writingChar = "";
         writeContext = { type: "bubble" };
+        if (els.moeBox) els.moeBox.classList.remove("speak-only");
+        if (finishCharDict) {
+          if (pendingHelpChar && charDictSession) {
+            charDictSession.hintedChars.add(pendingHelpChar);
+          }
+          finishCharDictation({ completed: false });
+        }
       }
 
       function voiceNameHas(v, ...needles) {
@@ -4799,6 +5002,11 @@
       }
 
       function openVocabExam() {
+        if (charDictSession) {
+          alert("請先結束生字聽寫再開始語詞聽寫。");
+          return;
+        }
+        if (els.vocabExamTitle) els.vocabExamTitle.textContent = "語詞聽寫";
         if (els.vocabSetupPanel) els.vocabSetupPanel.hidden = false;
         if (els.vocabPlayPanel) els.vocabPlayPanel.hidden = true;
         if (els.vocabSummaryPanel) els.vocabSummaryPanel.hidden = true;
@@ -4817,6 +5025,7 @@
       function dismissVocabExamUI() {
         vocabSession = null;
         closeVocabStrokeHint();
+        if (els.vocabExamTitle) els.vocabExamTitle.textContent = "語詞聽寫";
         if (els.vocabExamOverlay) els.vocabExamOverlay.hidden = true;
         if (els.vocabSetupPanel) els.vocabSetupPanel.hidden = false;
         if (els.vocabPlayPanel) els.vocabPlayPanel.hidden = true;
@@ -4829,7 +5038,7 @@
         renderAll();
       }
 
-      function showVocabHintSummary(hinted) {
+      function showVocabHintSummary(hinted, opts) {
         closeVocabStrokeHint();
         if ("speechSynthesis" in window) {
           try {
@@ -4841,25 +5050,98 @@
         if (els.vocabSummaryPanel) els.vocabSummaryPanel.hidden = false;
         if (els.vocabExamOverlay) els.vocabExamOverlay.hidden = false;
         const list = Array.isArray(hinted) ? hinted.filter(Boolean) : [];
+        const kind = (opts && opts.kind) || "vocab";
+        if (els.vocabExamTitle) {
+          els.vocabExamTitle.textContent =
+            kind === "charDict" ? "生字聽寫結果" : "語詞聽寫";
+        }
         if (els.vocabSummaryHint) {
           const seat = activeSeat();
           const who = seat ? seatLabel(seat) : "這位學生";
-          els.vocabSummaryHint.textContent = list.length
-            ? "本輪曾用 📖 查看筆順的字如下；只會把「" +
-              who +
-              "」的對應泡泡先變成粉紅色，其他學生不變。之後練習變色規則不變。"
-            : "本輪沒有按過 📖。可以直接回到泡泡練習。";
+          if (kind === "charDict") {
+            els.vocabSummaryHint.textContent = list.length
+              ? "本輪曾用「顯示底圖」或「提示下一筆」的字如下；只會把「" +
+                who +
+                "」的對應泡泡先變成粉紅色，其他學生不變。之後練習變色規則不變。"
+              : "本輪沒有使用底圖或下一筆提示。可以直接回到泡泡練習。";
+          } else {
+            els.vocabSummaryHint.textContent = list.length
+              ? "本輪曾用 📖 查看筆順的字如下；只會把「" +
+                who +
+                "」的對應泡泡先變成粉紅色，其他學生不變。之後練習變色規則不變。"
+              : "本輪沒有按過 📖。可以直接回到泡泡練習。";
+          }
         }
         if (els.vocabSummaryChars) {
           if (!list.length) {
             els.vocabSummaryChars.innerHTML =
-              "<p class='vocab-summary-empty'>沒有查看過筆順的字</p>";
+              "<p class='vocab-summary-empty'>" +
+              (kind === "charDict" ? "沒有使用提示的字" : "沒有查看過筆順的字") +
+              "</p>";
           } else {
             els.vocabSummaryChars.innerHTML = list
               .map((ch) => "<span class='chip'>" + escapeHtml(ch) + "</span>")
               .join("");
           }
         }
+      }
+
+      function startCharDictation() {
+        const seat = activeSeat();
+        if (!seat) {
+          alert("請先選目前聽寫的學生座號，粉紅泡泡只會記在這位學生身上。");
+          openSeatPicker();
+          return;
+        }
+        const list = (state.chars || []).slice();
+        if (!list.length) {
+          alert("請先設定本課生字。");
+          openSetup();
+          return;
+        }
+        if (vocabSession) {
+          alert("請先結束語詞聽寫再開始生字聽寫。");
+          return;
+        }
+        charDictSession = {
+          seatId: seat.id,
+          chars: list,
+          index: 0,
+          hintedChars: new Set(),
+        };
+        openWrite(list[0], { type: "charDict", index: 0 });
+      }
+
+      function onCharDictComplete(ch, helped) {
+        if (!charDictSession) return;
+        if (helped && ch) charDictSession.hintedChars.add(ch);
+        if (charDictSession.index >= charDictSession.chars.length - 1) {
+          finishCharDictation({ completed: true });
+          return;
+        }
+        charDictSession.index += 1;
+        const next = charDictSession.chars[charDictSession.index];
+        if (!next) {
+          finishCharDictation({ completed: true });
+          return;
+        }
+        openWrite(next, { type: "charDict", index: charDictSession.index });
+      }
+
+      function finishCharDictation(opts) {
+        const hinted =
+          charDictSession && charDictSession.hintedChars
+            ? Array.from(charDictSession.hintedChars)
+            : [];
+        const seatId =
+          charDictSession && charDictSession.seatId != null
+            ? charDictSession.seatId
+            : activeSeat() && activeSeat().id;
+        if (seatId != null) mergeVocabHintedCharsForSeat(seatId, hinted);
+        save();
+        charDictSession = null;
+        showVocabHintSummary(hinted, { kind: "charDict" });
+        renderAll();
       }
 
       /** 結束聽寫：只合併「這位考生」的粉泡標記 → 列出曾看過的字 → 回泡泡 */
@@ -5305,6 +5587,13 @@
 
       // events
       els.setupBtn.addEventListener("click", openSetup);
+      if (els.prevLessonBtn) {
+        els.prevLessonBtn.addEventListener("click", () => switchLessonByOffset(-1));
+      }
+      if (els.nextLessonBtn) {
+        els.nextLessonBtn.addEventListener("click", () => switchLessonByOffset(1));
+      }
+      if (els.charDictBtn) els.charDictBtn.addEventListener("click", startCharDictation);
       if (els.vocabExamBtn) els.vocabExamBtn.addEventListener("click", openVocabExam);
       if (els.vocabCloseSetupBtn) els.vocabCloseSetupBtn.addEventListener("click", closeVocabExam);
       if (els.vocabExitBtn) els.vocabExitBtn.addEventListener("click", closeVocabExam);
@@ -5425,6 +5714,7 @@
         if (quiz) quiz.setShowOutline(!!els.outlineNowCheck.checked);
       });
       els.hintStrokeCheck.addEventListener("change", () => {
+        if (els.hintStrokeCheck.checked) practiceUsedHint = true;
         if (quiz) quiz.refreshHint();
       });
       if (els.moePlayBtn) {
