@@ -4389,8 +4389,15 @@
         destroyMoeDemo();
         els.writeOverlay.hidden = false;
         destroyQuiz();
+        cancelSpeech();
         if (showMoe) {
           ensureWordSheet().catch(() => {});
+          // 進入練習寫字畫面就朗讀生字＋兩個語詞（喇叭仍可再聽一次）
+          setTimeout(() => {
+            if (writingChar === ch && writeContext && writeContext.type !== "vocab") {
+              speakCharWithWords(ch);
+            }
+          }, 280);
         }
 
         const size = Math.min(420, Math.floor(window.innerWidth * 0.86), Math.floor(window.innerHeight * 0.52));
