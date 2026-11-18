@@ -5028,24 +5028,44 @@
             }
             const seat = activeSeat();
             if (!seat || !writingChar) return;
+            const chDone = writingChar;
             const usedOutline =
               practiceUsedOutline || !!(els.outlineNowCheck && els.outlineNowCheck.checked);
-            const rec = markCharPractice(seat, writingChar, usedOutline);
+            const rec = markCharPractice(seat, chDone, usedOutline);
+            const nextCh = nextBubblePracticeChar(chDone);
             if (usedOutline) {
-              els.writeMsg.textContent = "完成了！有用底圖 → 淺藍（關掉底圖再練可變綠）";
+              els.writeMsg.textContent = nextCh
+                ? "完成了！接著下一個…"
+                : "完成了！有用底圖 → 淺藍（關掉底圖再練可變綠）";
             } else if (rec.freehand >= 2) {
-              els.writeMsg.textContent = "無底圖完成兩次！打勾 ✨";
+              els.writeMsg.textContent = nextCh
+                ? "無底圖完成兩次！接著下一個…"
+                : "無底圖完成兩次！打勾 ✨";
             } else {
-              els.writeMsg.textContent = "無底圖寫對了！泡泡變綠 ✨";
+              els.writeMsg.textContent = nextCh
+                ? "寫對了！接著下一個…"
+                : "無底圖寫對了！泡泡變綠 ✨";
             }
             els.writeMsg.className = "write-msg ok";
             setTimeout(() => {
-              closeWrite({ skipCharDictFinish: true });
               renderAll();
               maybeGift(seat);
+              if (nextCh) {
+                openWrite(nextCh);
+              } else {
+                closeWrite({ skipCharDictFinish: true });
+              }
             }, 550);
           },
         });
+      }
+
+      /** 泡泡練習：寫完當前字後的下一個生字／複習字；已是最後一個則回 null */
+      function nextBubblePracticeChar(ch) {
+        const list = state.chars || [];
+        const i = list.indexOf(ch);
+        if (i < 0 || i >= list.length - 1) return null;
+        return list[i + 1] || null;
       }
 
       function openWrite(ch, ctx) {
@@ -5079,7 +5099,12 @@
           } else if (isVocab) {
             els.writeTitle.textContent = "寫出這個字";
           } else {
-            els.writeTitle.textContent = "依筆順寫出這個字";
+            const list = state.chars || [];
+            const idx = list.indexOf(ch);
+            els.writeTitle.textContent =
+              idx >= 0 && list.length
+                ? "依筆順寫出這個字（" + (idx + 1) + " / " + list.length + "）"
+                : "依筆順寫出這個字";
           }
         }
         if (els.writeHint) {
