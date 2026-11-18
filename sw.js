@@ -1,5 +1,5 @@
 /* 生字泡泡：快取主頁與內建筆順包 */
-const CACHE = "wordbubble-v26-compact-mobile";
+const CACHE = "wordbubble-v27-mobile-title-night";
 const PRECACHE = [
   "./index.html",
   "./sw.js",

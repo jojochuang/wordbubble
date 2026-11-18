@@ -67,11 +67,22 @@
       min-width: 0;
       flex: 1 1 auto;
     }
+    .brand-title-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      min-width: 0;
+    }
     .brand h1 {
       margin: 0;
       font-size: clamp(1.15rem, 2.4vw, 1.55rem);
       font-weight: 700;
       line-height: 1.1;
+    }
+    .night-toggle-brand {
+      display: none;
+      flex: 0 0 auto;
     }
     .lesson-nav {
       display: inline-flex;
@@ -96,7 +107,7 @@
       flex: 0 1 auto;
       max-width: min(52vw, 28rem);
     }
-    /* iPhone SE／窄螢幕：頂欄改兩列，動作列可橫向滑，確保「設定」看得到；泡泡改較密橫排 */
+    /* iPhone SE／窄螢幕：夜覽與標題同行；座號只顯示姓名；泡泡較密橫排 */
     @media (max-width: 480px) {
       .topbar {
         flex-wrap: wrap;
@@ -110,6 +121,14 @@
       }
       .brand h1 {
         font-size: 1.05rem;
+      }
+      .night-toggle-brand {
+        display: inline-flex;
+        padding: 5px 10px;
+        font-size: 0.75rem;
+      }
+      .night-toggle-desk {
+        display: none !important;
       }
       .lesson-nav {
         display: flex;
@@ -138,8 +157,7 @@
         max-width: 100%;
       }
       .top-actions .pill,
-      .top-actions .seat-now,
-      .top-actions .night-toggle {
+      .top-actions .seat-now {
         flex: 0 0 auto;
         padding: 6px 10px;
         font-size: 0.75rem;
@@ -1237,7 +1255,10 @@
 <body>
   <header class="topbar">
     <div class="brand">
-      <h1 class="display">生字泡泡</h1>
+      <div class="brand-title-row">
+        <h1 class="display">生字泡泡</h1>
+        <button type="button" class="night-toggle night-toggle-brand" id="nightToggle" title="夜覽／日間（黑底減少藍光）">夜覽</button>
+      </div>
       <div class="lesson-nav" id="lessonNav">
         <button type="button" class="pill ghost lesson-nav-btn" id="prevLessonBtn" title="上一課">上一課</button>
         <div class="sub" id="classSub">先設定課次與當週生字</div>
@@ -1247,7 +1268,7 @@
     <div class="top-actions">
       <button type="button" class="pill ghost" id="setupBtn">設定</button>
       <button type="button" class="seat-now empty" id="seatNowBtn" title="選擇座號">請先選座號</button>
-      <button type="button" class="night-toggle" id="nightToggle" title="夜覽／日間（黑底減少藍光）">夜覽</button>
+      <button type="button" class="night-toggle night-toggle-desk" id="nightToggleDesk" title="夜覽／日間（黑底減少藍光）">夜覽</button>
       <button type="button" class="pill ghost" id="charDictBtn">生字聽寫</button>
       <button type="button" class="pill ghost" id="vocabExamBtn">語詞聽寫</button>
     </div>
@@ -1528,24 +1549,28 @@
 
       function applyNightMode(on) {
         document.body.classList.toggle("night-mode", !!on);
-        const btn = document.getElementById("nightToggle");
-        if (btn) btn.textContent = on ? "日間" : "夜覽";
+        const label = on ? "日間" : "夜覽";
+        ["nightToggle", "nightToggleDesk"].forEach((id) => {
+          const btn = document.getElementById(id);
+          if (btn) btn.textContent = label;
+        });
         const theme = document.querySelector('meta[name="theme-color"]');
         if (theme) theme.setAttribute("content", on ? "#0d0d0d" : "#2aa0e8");
       }
       (function initNightMode() {
         const active = localStorage.getItem(NIGHT_KEY) === "1";
         applyNightMode(active);
-        const btn = document.getElementById("nightToggle");
-        if (btn) {
-          btn.addEventListener("click", () => {
-            const next = !document.body.classList.contains("night-mode");
-            applyNightMode(next);
-            try {
-              localStorage.setItem(NIGHT_KEY, next ? "1" : "0");
-            } catch (_) {}
-          });
-        }
+        const toggle = () => {
+          const next = !document.body.classList.contains("night-mode");
+          applyNightMode(next);
+          try {
+            localStorage.setItem(NIGHT_KEY, next ? "1" : "0");
+          } catch (_) {}
+        };
+        ["nightToggle", "nightToggleDesk"].forEach((id) => {
+          const btn = document.getElementById(id);
+          if (btn) btn.addEventListener("click", toggle);
+        });
       })();
       // 完整離線單檔（舊流程）或 GitHub 內建 pack-data.js / pack-data-book2.js
       const OFFLINE_PACK = window.__BUBBLE_OFFLINE__ || null;
@@ -4595,7 +4620,11 @@
         const seat = activeSeat();
         if (seat) {
           els.seatNowBtn.classList.remove("empty");
-          els.seatNowBtn.textContent = "目前：" + seatLabel(seat);
+          const narrow =
+            window.matchMedia && window.matchMedia("(max-width: 480px)").matches;
+          els.seatNowBtn.textContent = narrow
+            ? seatLabel(seat)
+            : "目前：" + seatLabel(seat);
         } else {
           els.seatNowBtn.classList.add("empty");
           els.seatNowBtn.textContent = "請先選座號";
@@ -6073,6 +6102,13 @@
       els.claimGiftBtn.addEventListener("click", () => {
         els.giftOverlay.hidden = true;
       });
+
+      if (window.matchMedia) {
+        const narrowMq = window.matchMedia("(max-width: 480px)");
+        const onNarrowChange = () => renderTop();
+        if (narrowMq.addEventListener) narrowMq.addEventListener("change", onNarrowChange);
+        else if (narrowMq.addListener) narrowMq.addListener(onNarrowChange);
+      }
 
       [els.setupOverlay, els.seatOverlay, els.writeOverlay, els.giftOverlay, els.vocabExamOverlay, els.addClassOverlay]
         .filter(Boolean)
