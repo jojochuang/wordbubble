@@ -1,5 +1,5 @@
 /* 生字泡泡：快取主頁與內建筆順包 */
-const CACHE = "wordbubble-v24-book2-password";
+const CACHE = "wordbubble-v25-pink-hint-fix";
 const PRECACHE = [
   "./index.html",
   "./sw.js",
