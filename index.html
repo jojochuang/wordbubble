@@ -1830,8 +1830,14 @@
           reviewChars: [],
           includeReview: true,
           chars: [],
+          // 舊版：progress[seatId][字]（跨課共用，已停用寫入）
           progress: {},
           giftsClaimed: {},
+          // 新版：依課次分開，避免複習字沿用他課的綠／勾
+          // progressByLesson[lessonId][seatId][字] = { freehand, outline }
+          progressByLesson: {},
+          // giftsClaimedByLesson[lessonId][seatId] = true
+          giftsClaimedByLesson: {},
           // 寶箱收藏：{ "1": ["🦊", "🍭", …] }（跨課累積）
           treasureBySeat: {},
           activeSeatId: null,
@@ -1991,6 +1997,13 @@
         state.chars = buildActiveChars(state.newChars, state.reviewChars, true);
         if (!state.progress || typeof state.progress !== "object") state.progress = {};
         if (!state.giftsClaimed || typeof state.giftsClaimed !== "object") state.giftsClaimed = {};
+        if (!state.progressByLesson || typeof state.progressByLesson !== "object") {
+          state.progressByLesson = {};
+        }
+        if (!state.giftsClaimedByLesson || typeof state.giftsClaimedByLesson !== "object") {
+          state.giftsClaimedByLesson = {};
+        }
+        migrateLegacyProgressToLessonScope();
         if (!state.treasureBySeat || typeof state.treasureBySeat !== "object") {
           state.treasureBySeat = {};
         }
@@ -2593,41 +2606,13 @@
           alert("這一課沒有生字／複習字。");
           return;
         }
-        const oldProgress = state.progress || {};
-        const oldGifts = state.giftsClaimed || {};
         state.lessonId = les.id || "";
         state.lessonName = les.name || "";
         state.newChars = newChars;
         state.reviewChars = reviewChars;
         state.includeReview = true;
         state.chars = chars;
-        // 粉紅聽寫標記跨課保留，不依當週生字過濾
-        state.progress = {};
-        state.giftsClaimed = {};
-        (state.seats || []).forEach((s) => {
-          const k = String(s.id);
-          const prevRaw = oldProgress[k];
-          const prevMap = Array.isArray(prevRaw)
-            ? (() => {
-                const m = {};
-                prevRaw.forEach((c) => {
-                  if (c) m[c] = { freehand: 1, outline: false };
-                });
-                return m;
-              })()
-            : prevRaw && typeof prevRaw === "object"
-              ? prevRaw
-              : {};
-          const nextMap = {};
-          Object.keys(prevMap).forEach((c) => {
-            if (chars.includes(c)) nextMap[c] = normalizeCharRecord(prevMap[c]);
-          });
-          state.progress[k] = nextMap;
-          const doneCount = Object.keys(nextMap).filter((c) => isCharPracticed(nextMap[c])).length;
-          if (oldGifts[k] && doneCount === chars.length && chars.length > 0) {
-            state.giftsClaimed[k] = true;
-          }
-        });
+        // 各課進度獨立：不把他課練過的字抄到本課（複習字重新練）
         ensureSeatProgressKeys();
         if (els.lessonSelect) els.lessonSelect.value = les.id || "";
         applyLessonToForm(les);
@@ -3391,31 +3376,86 @@
         return out;
       }
 
+      function mergeGiftsClaimedMaps(a, b) {
+        const out = Object.assign({}, a || {}, b || {});
+        Object.keys(out).forEach((k) => {
+          out[k] = !!(a && a[k]) || !!(b && b[k]);
+        });
+        return out;
+      }
+
+      function mergeProgressByLesson(a, b) {
+        const out = {};
+        const lids = new Set([
+          ...Object.keys(a && typeof a === "object" ? a : {}),
+          ...Object.keys(b && typeof b === "object" ? b : {}),
+        ]);
+        lids.forEach((lid) => {
+          out[lid] = mergeProgressMaps(
+            a && a[lid],
+            b && b[lid]
+          );
+        });
+        return out;
+      }
+
+      function mergeGiftsClaimedByLesson(a, b) {
+        const out = {};
+        const lids = new Set([
+          ...Object.keys(a && typeof a === "object" ? a : {}),
+          ...Object.keys(b && typeof b === "object" ? b : {}),
+        ]);
+        lids.forEach((lid) => {
+          out[lid] = mergeGiftsClaimedMaps(
+            a && a[lid],
+            b && b[lid]
+          );
+        });
+        return out;
+      }
+
+      function countProgressEntries(seatBag) {
+        let n = 0;
+        const map = seatBag && typeof seatBag === "object" ? seatBag : {};
+        Object.keys(map).forEach((sid) => {
+          const m = map[sid];
+          if (Array.isArray(m)) n += m.length;
+          else if (m && typeof m === "object") n += Object.keys(m).length;
+        });
+        return n;
+      }
+
+      function countProgressByLesson(byLesson) {
+        let n = 0;
+        const bag = byLesson && typeof byLesson === "object" ? byLesson : {};
+        Object.keys(bag).forEach((lid) => {
+          n += countProgressEntries(bag[lid]);
+        });
+        return n;
+      }
+
       function mergeBoardState(local, incoming) {
         const L = local && typeof local === "object" ? local : {};
         const R = incoming && typeof incoming === "object" ? incoming : {};
         const seats = mergeSeats(L.seats, R.seats);
+        // 舊版扁平進度仍合併（僅供遷移）；實際顯示用 progressByLesson
         const progress = mergeProgressMaps(L.progress, R.progress);
-        const giftsClaimed = Object.assign({}, L.giftsClaimed || {}, R.giftsClaimed || {});
-        Object.keys(giftsClaimed).forEach((k) => {
-          giftsClaimed[k] = !!(L.giftsClaimed && L.giftsClaimed[k]) || !!(R.giftsClaimed && R.giftsClaimed[k]);
-        });
+        const giftsClaimed = mergeGiftsClaimedMaps(L.giftsClaimed, R.giftsClaimed);
+        const progressByLesson = mergeProgressByLesson(L.progressByLesson, R.progressByLesson);
+        const giftsClaimedByLesson = mergeGiftsClaimedByLesson(
+          L.giftsClaimedByLesson,
+          R.giftsClaimedByLesson
+        );
         const newChars = mergeCharLists(L.newChars, R.newChars);
         const reviewChars = mergeCharLists(L.reviewChars, R.reviewChars);
         let chars = mergeCharLists(L.chars, R.chars);
         if (!chars.length) chars = buildActiveChars(newChars, reviewChars, true);
         // 課次：兩邊不同時，優先保留「本機目前有較多練習紀錄」的那側設定，否則用備份
-        const countProg = (p) => {
-          let n = 0;
-          const map = p && typeof p === "object" ? p : {};
-          Object.keys(map).forEach((sid) => {
-            const m = map[sid];
-            if (Array.isArray(m)) n += m.length;
-            else if (m && typeof m === "object") n += Object.keys(m).length;
-          });
-          return n;
-        };
-        const preferLocalLesson = countProg(L.progress) >= countProg(R.progress);
+        const localCount =
+          countProgressByLesson(L.progressByLesson) || countProgressEntries(L.progress);
+        const remoteCount =
+          countProgressByLesson(R.progressByLesson) || countProgressEntries(R.progress);
+        const preferLocalLesson = localCount >= remoteCount;
         return {
           className: L.className || R.className || "",
           seats: seats.length ? seats : L.seats || R.seats || [],
@@ -3430,6 +3470,8 @@
           activeSeatId: L.activeSeatId != null ? L.activeSeatId : R.activeSeatId,
           progress: progress,
           giftsClaimed: giftsClaimed,
+          progressByLesson: progressByLesson,
+          giftsClaimedByLesson: giftsClaimedByLesson,
           showOutline: false,
           showMoe: true,
           vocabHintsBySeat: mergeVocabHints(L.vocabHintsBySeat, R.vocabHintsBySeat),
@@ -3674,6 +3716,8 @@
             activeSeatId: null,
             progress: {},
             giftsClaimed: {},
+            progressByLesson: {},
+            giftsClaimedByLesson: {},
           });
           const pack = { state: packState, charData: {} };
           chars.forEach((ch) => {
@@ -4376,10 +4420,16 @@
         };
       }
 
-      function progressMapFor(seatId) {
-        const raw = state.progress[String(seatId)];
+      function currentProgressLessonKey() {
+        return String(state.lessonId || "").trim() || "_lesson";
+      }
+
+      function looksLikeCharRecord(v) {
+        return !!(v && typeof v === "object" && !Array.isArray(v) && ("freehand" in v || "outline" in v));
+      }
+
+      function rawSeatProgressToCharMap(raw) {
         if (!raw) return {};
-        // 舊格式：字陣列 → 視為無底圖完成 1 次
         if (Array.isArray(raw)) {
           const map = {};
           raw.forEach((ch) => {
@@ -4390,9 +4440,73 @@
         if (typeof raw !== "object") return {};
         const map = {};
         Object.keys(raw).forEach((ch) => {
-          map[ch] = normalizeCharRecord(raw[ch]);
+          if (looksLikeCharRecord(raw[ch])) map[ch] = normalizeCharRecord(raw[ch]);
         });
         return map;
+      }
+
+      /** 舊版跨課 progress／giftsClaimed → 只灌進「當前課次」一次，之後清空扁平欄位，避免換課又被灌綠 */
+      function migrateLegacyProgressToLessonScope() {
+        if (!state.progressByLesson || typeof state.progressByLesson !== "object") {
+          state.progressByLesson = {};
+        }
+        if (!state.giftsClaimedByLesson || typeof state.giftsClaimedByLesson !== "object") {
+          state.giftsClaimedByLesson = {};
+        }
+        const lid = currentProgressLessonKey();
+        const hasAnyLessonProg = Object.keys(state.progressByLesson).some((k) => {
+          const bag = state.progressByLesson[k];
+          return bag && typeof bag === "object" && Object.keys(bag).length > 0;
+        });
+        const hasAnyLessonGift = Object.keys(state.giftsClaimedByLesson).some((k) => {
+          const bag = state.giftsClaimedByLesson[k];
+          return bag && typeof bag === "object" && Object.keys(bag).length > 0;
+        });
+        if (!hasAnyLessonProg && state.progress && typeof state.progress === "object" && lid) {
+          const bag = {};
+          Object.keys(state.progress).forEach((sid) => {
+            const map = rawSeatProgressToCharMap(state.progress[sid]);
+            if (Object.keys(map).length) bag[sid] = map;
+          });
+          if (Object.keys(bag).length) state.progressByLesson[lid] = bag;
+        }
+        if (!hasAnyLessonGift && state.giftsClaimed && typeof state.giftsClaimed === "object" && lid) {
+          const g = {};
+          Object.keys(state.giftsClaimed).forEach((sid) => {
+            if (state.giftsClaimed[sid]) g[sid] = true;
+          });
+          if (Object.keys(g).length) state.giftsClaimedByLesson[lid] = g;
+        }
+        // 遷移後（或已有課次進度）不再保留扁平跨課進度，避免換課又複製綠泡
+        state.progress = {};
+        state.giftsClaimed = {};
+      }
+
+      function lessonProgressBag(lessonId) {
+        const lid = String(lessonId || currentProgressLessonKey());
+        if (!state.progressByLesson || typeof state.progressByLesson !== "object") {
+          state.progressByLesson = {};
+        }
+        if (!state.progressByLesson[lid] || typeof state.progressByLesson[lid] !== "object") {
+          state.progressByLesson[lid] = {};
+        }
+        return state.progressByLesson[lid];
+      }
+
+      function lessonGiftsBag(lessonId) {
+        const lid = String(lessonId || currentProgressLessonKey());
+        if (!state.giftsClaimedByLesson || typeof state.giftsClaimedByLesson !== "object") {
+          state.giftsClaimedByLesson = {};
+        }
+        if (!state.giftsClaimedByLesson[lid] || typeof state.giftsClaimedByLesson[lid] !== "object") {
+          state.giftsClaimedByLesson[lid] = {};
+        }
+        return state.giftsClaimedByLesson[lid];
+      }
+
+      function progressMapFor(seatId) {
+        const bag = lessonProgressBag();
+        return rawSeatProgressToCharMap(bag[String(seatId)]);
       }
 
       function charRecordFor(seatId, ch) {
@@ -4409,27 +4523,39 @@
         return new Set(Object.keys(map).filter((ch) => isCharPracticed(map[ch])));
       }
 
+      function isGiftClaimedForSeat(seatId) {
+        const bag = lessonGiftsBag();
+        return !!bag[String(seatId)];
+      }
+
+      function setGiftClaimedForSeat(seatId, val) {
+        const bag = lessonGiftsBag();
+        const k = String(seatId);
+        if (val) bag[k] = true;
+        else delete bag[k];
+      }
+
       function ensureSeatProgressKeys() {
+        const bag = lessonProgressBag();
         state.seats.forEach((s) => {
           const k = String(s.id);
-          const raw = state.progress[k];
-          if (Array.isArray(raw)) {
-            const map = {};
-            raw.forEach((ch) => {
-              if (ch) map[ch] = { freehand: 1, outline: false };
-            });
-            state.progress[k] = map;
+          const raw = bag[k];
+          if (Array.isArray(raw) || (raw && typeof raw === "object" && looksLikeCharRecord(raw[Object.keys(raw)[0] || ""]))) {
+            // 不應出現；若誤塞舊格式則正規化
+            bag[k] = rawSeatProgressToCharMap(raw);
           } else if (!raw || typeof raw !== "object") {
-            state.progress[k] = {};
+            bag[k] = {};
           }
         });
+        lessonGiftsBag();
       }
 
       function markCharPractice(seat, ch, usedOutline) {
         const key = String(seat.id);
         ensureSeatProgressKeys();
-        if (!state.progress[key] || typeof state.progress[key] !== "object" || Array.isArray(state.progress[key])) {
-          state.progress[key] = progressMapFor(seat.id);
+        const bag = lessonProgressBag();
+        if (!bag[key] || typeof bag[key] !== "object" || Array.isArray(bag[key])) {
+          bag[key] = progressMapFor(seat.id);
         }
         const rec = charRecordFor(seat.id, ch);
         if (usedOutline) {
@@ -4437,7 +4563,7 @@
         } else {
           rec.freehand = Math.min(2, (rec.freehand || 0) + 1);
         }
-        state.progress[key][ch] = rec;
+        bag[key][ch] = rec;
         save();
         return rec;
       }
@@ -4493,6 +4619,22 @@
         state.seats = renumbered;
         state.progress = remapSeatKeyedObject(state.progress, idMap);
         state.giftsClaimed = remapSeatKeyedObject(state.giftsClaimed, idMap);
+        if (state.progressByLesson && typeof state.progressByLesson === "object") {
+          Object.keys(state.progressByLesson).forEach((lid) => {
+            state.progressByLesson[lid] = remapSeatKeyedObject(
+              state.progressByLesson[lid],
+              idMap
+            );
+          });
+        }
+        if (state.giftsClaimedByLesson && typeof state.giftsClaimedByLesson === "object") {
+          Object.keys(state.giftsClaimedByLesson).forEach((lid) => {
+            state.giftsClaimedByLesson[lid] = remapSeatKeyedObject(
+              state.giftsClaimedByLesson[lid],
+              idMap
+            );
+          });
+        }
         state.vocabHintsBySeat = remapSeatKeyedObject(state.vocabHintsBySeat, idMap);
         state.vocabResumeBySeat = remapSeatKeyedObject(state.vocabResumeBySeat, idMap);
         state.charDictResumeBySeat = remapSeatKeyedObject(state.charDictResumeBySeat, idMap);
@@ -5971,9 +6113,8 @@
         const done = doneSetFor(seat.id);
         const allDone = state.chars.every((c) => done.has(c));
         if (!allDone) return;
-        const k = String(seat.id);
-        if (state.giftsClaimed[k]) return;
-        state.giftsClaimed[k] = true;
+        if (isGiftClaimedForSeat(seat.id)) return;
+        setGiftClaimedForSeat(seat.id, true);
         const emoji = pickGiftEmoji(seat.id);
         addTreasureEmoji(seat.id, emoji);
         save();
@@ -6030,8 +6171,6 @@
         }
         const lessonId = els.lessonSelect ? els.lessonSelect.value : "";
         const les = lessonCatalog.find((x) => x.id === lessonId) || null;
-        const oldProgress = state.progress || {};
-        const oldGifts = state.giftsClaimed || {};
         state.className = "";
         state.seats = seats;
         state.lessonId = lessonId || "";
@@ -6040,7 +6179,7 @@
         state.reviewChars = reviewChars;
         state.includeReview = true;
         state.chars = chars;
-        // 粉紅聽寫標記、寶箱收藏跨課保留；只清掉已刪座號的紀錄
+        // 粉紅聽寫標記、寶箱收藏、各課進度跨課保留；只清掉已刪座號的紀錄
         const seatIds = new Set(seats.map((s) => String(s.id)));
         if (state.vocabHintsBySeat && typeof state.vocabHintsBySeat === "object") {
           Object.keys(state.vocabHintsBySeat).forEach((sid) => {
@@ -6059,34 +6198,32 @@
             else if (!Array.isArray(state.treasureBySeat[sid])) state.treasureBySeat[sid] = [];
           });
         }
+        if (state.progressByLesson && typeof state.progressByLesson === "object") {
+          Object.keys(state.progressByLesson).forEach((lid) => {
+            const bag = state.progressByLesson[lid];
+            if (!bag || typeof bag !== "object") {
+              delete state.progressByLesson[lid];
+              return;
+            }
+            Object.keys(bag).forEach((sid) => {
+              if (!seatIds.has(String(sid))) delete bag[sid];
+            });
+          });
+        }
+        if (state.giftsClaimedByLesson && typeof state.giftsClaimedByLesson === "object") {
+          Object.keys(state.giftsClaimedByLesson).forEach((lid) => {
+            const bag = state.giftsClaimedByLesson[lid];
+            if (!bag || typeof bag !== "object") {
+              delete state.giftsClaimedByLesson[lid];
+              return;
+            }
+            Object.keys(bag).forEach((sid) => {
+              if (!seatIds.has(String(sid))) delete bag[sid];
+            });
+          });
+        }
         state.showOutline = false;
         state.showMoe = true;
-        state.progress = {};
-        state.giftsClaimed = {};
-        seats.forEach((s) => {
-          const k = String(s.id);
-          const prevRaw = oldProgress[k];
-          const prevMap = Array.isArray(prevRaw)
-            ? (() => {
-                const m = {};
-                prevRaw.forEach((c) => {
-                  if (c) m[c] = { freehand: 1, outline: false };
-                });
-                return m;
-              })()
-            : prevRaw && typeof prevRaw === "object"
-              ? prevRaw
-              : {};
-          const nextMap = {};
-          Object.keys(prevMap).forEach((c) => {
-            if (chars.includes(c)) nextMap[c] = normalizeCharRecord(prevMap[c]);
-          });
-          state.progress[k] = nextMap;
-          const doneCount = Object.keys(nextMap).filter((c) => isCharPracticed(nextMap[c])).length;
-          if (oldGifts[k] && doneCount === chars.length && chars.length > 0) {
-            state.giftsClaimed[k] = true;
-          }
-        });
         if (state.activeSeatId != null && !seats.some((s) => s.id === state.activeSeatId)) {
           state.activeSeatId = null;
         }
