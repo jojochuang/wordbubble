@@ -96,6 +96,81 @@
       flex: 0 1 auto;
       max-width: min(52vw, 28rem);
     }
+    /* iPhone SE／窄螢幕：頂欄改兩列，動作列可橫向滑，確保「設定」看得到；泡泡改較密橫排 */
+    @media (max-width: 480px) {
+      .topbar {
+        flex-wrap: wrap;
+        align-items: stretch;
+        gap: 8px;
+        padding: calc(8px + var(--safe-t)) 10px 8px;
+      }
+      .brand {
+        flex: 1 1 100%;
+        min-width: 0;
+      }
+      .brand h1 {
+        font-size: 1.05rem;
+      }
+      .lesson-nav {
+        display: flex;
+        flex-wrap: nowrap;
+        width: 100%;
+        max-width: 100%;
+        gap: 4px;
+      }
+      .lesson-nav-btn {
+        padding: 5px 8px;
+        font-size: 0.72rem;
+      }
+      .brand .sub {
+        max-width: none;
+        flex: 1 1 auto;
+        font-size: 0.72rem;
+      }
+      .top-actions {
+        flex: 1 1 100%;
+        flex-wrap: nowrap;
+        justify-content: flex-start;
+        gap: 6px;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        padding-bottom: 2px;
+        max-width: 100%;
+      }
+      .top-actions .pill,
+      .top-actions .seat-now,
+      .top-actions .night-toggle {
+        flex: 0 0 auto;
+        padding: 6px 10px;
+        font-size: 0.75rem;
+        white-space: nowrap;
+      }
+      .top-actions #setupBtn {
+        order: -2;
+      }
+      .top-actions #seatNowBtn {
+        order: -1;
+      }
+      .progress-row {
+        gap: 8px;
+      }
+      .meter {
+        min-width: 0;
+      }
+      .bubbles {
+        grid-template-columns: repeat(auto-fill, minmax(68px, 1fr));
+        grid-auto-flow: row;
+        gap: 8px;
+        max-width: none;
+      }
+      .bubble {
+        font-size: clamp(1.35rem, 8.5vw, 1.9rem);
+      }
+      main {
+        padding: 8px 10px calc(10px + var(--safe-b));
+        gap: 8px;
+      }
+    }
     .moe-box.speak-only .moe-demo-panel {
       display: none !important;
     }
@@ -1170,11 +1245,11 @@
       </div>
     </div>
     <div class="top-actions">
-      <button type="button" class="night-toggle" id="nightToggle" title="夜覽／日間（黑底減少藍光）">夜覽</button>
+      <button type="button" class="pill ghost" id="setupBtn">設定</button>
       <button type="button" class="seat-now empty" id="seatNowBtn" title="選擇座號">請先選座號</button>
+      <button type="button" class="night-toggle" id="nightToggle" title="夜覽／日間（黑底減少藍光）">夜覽</button>
       <button type="button" class="pill ghost" id="charDictBtn">生字聽寫</button>
       <button type="button" class="pill ghost" id="vocabExamBtn">語詞聽寫</button>
-      <button type="button" class="pill ghost" id="setupBtn">設定</button>
     </div>
   </header>
 
@@ -1182,9 +1257,7 @@
     <div class="progress-row">
       <div class="meter" aria-hidden="true"><span id="meterFill"></span></div>
       <div class="meter-label" id="meterLabel">0 / 0</div>
-      <button type="button" class="pill primary" id="pickSeatBtn">選座號／姓名</button>
     </div>
-    <div class="quick-seats" id="quickSeats" hidden></div>
     <div class="board" id="board">
       <div class="empty-hint" id="emptyHint">請按右上角「設定」，選擇課次與當週生字。</div>
       <div class="bubbles" id="bubbles" hidden></div>
@@ -1541,7 +1614,7 @@
         setupBtn: document.getElementById("setupBtn"),
         writeTitle: document.getElementById("writeTitle"),
         moeDemoPanel: document.getElementById("moeDemoPanel"),
-        pickSeatBtn: document.getElementById("pickSeatBtn"),
+        pickSeatBtn: document.getElementById("pickSeatBtn"), /* 已移除；保留相容 */
         classSwitchList: document.getElementById("classSwitchList"),
         addClassBtn: document.getElementById("addClassBtn"),
         addClassOverlay: document.getElementById("addClassOverlay"),
@@ -1582,7 +1655,7 @@
         meterLabel: document.getElementById("meterLabel"),
         emptyHint: document.getElementById("emptyHint"),
         bubbles: document.getElementById("bubbles"),
-        quickSeats: document.getElementById("quickSeats"),
+        quickSeats: document.getElementById("quickSeats"), /* 已移除；保留相容 */
         setupOverlay: document.getElementById("setupOverlay"),
         seatOverlay: document.getElementById("seatOverlay"),
         writeOverlay: document.getElementById("writeOverlay"),
@@ -4483,28 +4556,10 @@
       }
 
       function renderQuickSeats() {
-        if (!state.seats.length) {
-          els.quickSeats.hidden = true;
-          els.quickSeats.innerHTML = "";
-          return;
-        }
-        els.quickSeats.hidden = false;
+        /* 快速座號列已移除；改用右上角「目前座號」按鈕 */
+        if (!els.quickSeats) return;
+        els.quickSeats.hidden = true;
         els.quickSeats.innerHTML = "";
-        state.seats.forEach((seat) => {
-          const btn = document.createElement("button");
-          btn.type = "button";
-          btn.className = "seat-btn";
-          if (seat.id === state.activeSeatId) btn.classList.add("active");
-          const done = doneSetFor(seat.id);
-          if (state.chars.length && state.chars.every((c) => done.has(c))) btn.classList.add("done-all");
-          btn.innerHTML = '<span class="no">' + seat.id + "</span>" + escapeHtml(seatLabel(seat));
-          btn.addEventListener("click", () => {
-            state.activeSeatId = seat.id;
-            save();
-            renderAll();
-          });
-          els.quickSeats.appendChild(btn);
-        });
       }
 
       function escapeHtml(s) {
@@ -5954,8 +6009,8 @@
       }
       els.seatCountInput.addEventListener("change", rebuildNamesEdit);
 
-      els.seatNowBtn.addEventListener("click", openSeatPicker);
-      els.pickSeatBtn.addEventListener("click", openSeatPicker);
+      if (els.seatNowBtn) els.seatNowBtn.addEventListener("click", openSeatPicker);
+      if (els.pickSeatBtn) els.pickSeatBtn.addEventListener("click", openSeatPicker);
       els.closeSeatBtn.addEventListener("click", closeSeatPicker);
       els.clearSeatBtn.addEventListener("click", () => {
         state.activeSeatId = null;
