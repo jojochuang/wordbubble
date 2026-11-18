@@ -856,6 +856,37 @@
       from { transform: translateY(0) scale(1); }
       to { transform: translateY(-8px) scale(1.05); }
     }
+    .treasure-sheet {
+      width: min(520px, 100%);
+      text-align: center;
+    }
+    .treasure-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(52px, 1fr));
+      gap: 10px;
+      margin: 14px 0 6px;
+      max-height: min(52vh, 360px);
+      overflow: auto;
+      -webkit-overflow-scrolling: touch;
+      padding: 4px;
+    }
+    .treasure-grid .item {
+      font-size: 2rem;
+      line-height: 1.2;
+      background: rgba(255,255,255,0.72);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 8px 4px;
+    }
+    .treasure-empty {
+      color: var(--muted);
+      font-weight: 700;
+      margin: 18px 0;
+    }
+    body.night-mode .treasure-grid .item {
+      background: #1a1a1a;
+      border-color: #444;
+    }
     .gift-title {
       font-size: 1.6rem;
       margin: 10px 0 6px;
@@ -1271,6 +1302,7 @@
       <button type="button" class="night-toggle night-toggle-desk" id="nightToggleDesk" title="夜覽／日間（黑底減少藍光）">夜覽</button>
       <button type="button" class="pill ghost" id="charDictBtn">生字聽寫</button>
       <button type="button" class="pill ghost" id="vocabExamBtn">語詞聽寫</button>
+      <button type="button" class="pill ghost" id="treasureBtn" title="查看寶箱收藏">寶箱</button>
     </div>
   </header>
 
@@ -1507,10 +1539,23 @@
   <div class="overlay center gift-overlay" id="giftOverlay" hidden>
     <div class="sheet">
       <div class="gift-emoji" id="giftEmoji">🎁</div>
-      <h2 class="display gift-title" id="giftTitle">全部消完了！</h2>
-      <p class="hint" id="giftText">恭喜！可以跟老師領小禮物／抽扭蛋。</p>
+      <h2 class="display gift-title" id="giftTitle">全部消完了！恭喜得到 🎁</h2>
+      <p class="hint" id="giftText" hidden></p>
       <div class="row-btns" style="justify-content:center;">
         <button type="button" class="pill primary" id="claimGiftBtn">太棒了</button>
+        <button type="button" class="pill ghost" id="giftOpenTreasureBtn">打開寶箱</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 寶箱收藏 -->
+  <div class="overlay center" id="treasureOverlay" hidden>
+    <div class="sheet treasure-sheet" role="dialog" aria-labelledby="treasureTitle">
+      <h2 class="display" id="treasureTitle">我的寶箱</h2>
+      <p class="hint" id="treasureHint">每完成一課生字泡泡，會抽到一個小圖示放進寶箱。</p>
+      <div class="treasure-grid" id="treasureGrid"></div>
+      <div class="row-btns" style="justify-content:center;">
+        <button type="button" class="pill primary" id="treasureCloseBtn">關閉</button>
       </div>
     </div>
   </div>
@@ -1545,7 +1590,19 @@
       const NIGHT_KEY = "wordbubble_night";
       const BOOK2_UNLOCK_KEY = "wordbubble_book2_unlock";
       const BOOK2_PASSWORD = "CREC";
-      const GIFT_EMOJIS = ["🎁", "🌟", "🦄", "🍭", "🎈", "🦊", "🌈", "🏆"];
+      // 扭蛋小圖示池（共 123 個：食物／點心／交通／生活娛樂等）；抽獎優先避開寶箱已有
+      const GIFT_EMOJIS = [
+        "🎁", "🌟", "🦄", "🍭", "🎈", "🦊", "🌈", "🏆",
+        "🍎", "🍊", "🍋", "🍌", "🍉", "🍇", "🍓", "🫐", "🍑", "🍒", "🥝", "🍍",
+        "🍪", "🍩", "🍰", "🧁", "🍫", "🍬", "🍦", "🍨", "🍿", "🥨",
+        "🥐", "🥯", "🍞", "🧀", "🍕", "🍔", "🌭", "🍟", "🌮", "🍣", "🍙", "🥟",
+        "🥤", "🧃", "🧋", "☕", "🍵", "🥛",
+        "🚗", "🚕", "🚙", "🚌", "🚎", "🏎️", "🚓", "🚑", "🚒", "✈️", "🚀", "🚁", "🚢", "🚲", "🛴",
+        "⚽", "🏀", "🎾", "🏐", "🎱", "🎮", "🎲", "🎯", "🧩", "🎨", "🎵", "🎧", "📚", "✏️",
+        "🐶", "🐱", "🐭", "🐹", "🐰", "🐻", "🐼", "🐨", "🐯", "🦁", "🐮", "🐷", "🐸", "🐵", "🐥", "🐧", "🐦",
+        "🌸", "🌼", "🌻", "🌷", "🍀", "🌴", "⭐", "🌙", "☀️", "⚡", "🔥", "💧", "❄️",
+        "👑", "💎", "🔔", "🪄", "🧸", "🪀", "🪁", "🧧", "🎀", "👒", "🧢", "👓", "⌚", "📱", "💻", "🔑",
+      ];
 
       function applyNightMode(on) {
         document.body.classList.toggle("night-mode", !!on);
@@ -1723,6 +1780,13 @@
         giftTitle: document.getElementById("giftTitle"),
         giftText: document.getElementById("giftText"),
         claimGiftBtn: document.getElementById("claimGiftBtn"),
+        giftOpenTreasureBtn: document.getElementById("giftOpenTreasureBtn"),
+        treasureBtn: document.getElementById("treasureBtn"),
+        treasureOverlay: document.getElementById("treasureOverlay"),
+        treasureTitle: document.getElementById("treasureTitle"),
+        treasureHint: document.getElementById("treasureHint"),
+        treasureGrid: document.getElementById("treasureGrid"),
+        treasureCloseBtn: document.getElementById("treasureCloseBtn"),
         confetti: document.getElementById("confetti"),
         dictationCheer: document.getElementById("dictationCheer"),
         dictationCheerImg: document.getElementById("dictationCheerImg"),
@@ -1768,6 +1832,8 @@
           chars: [],
           progress: {},
           giftsClaimed: {},
+          // 寶箱收藏：{ "1": ["🦊", "🍭", …] }（跨課累積）
+          treasureBySeat: {},
           activeSeatId: null,
           showOutline: false,
           showMoe: true,
@@ -1925,6 +1991,12 @@
         state.chars = buildActiveChars(state.newChars, state.reviewChars, true);
         if (!state.progress || typeof state.progress !== "object") state.progress = {};
         if (!state.giftsClaimed || typeof state.giftsClaimed !== "object") state.giftsClaimed = {};
+        if (!state.treasureBySeat || typeof state.treasureBySeat !== "object") {
+          state.treasureBySeat = {};
+        }
+        Object.keys(state.treasureBySeat).forEach((sid) => {
+          if (!Array.isArray(state.treasureBySeat[sid])) state.treasureBySeat[sid] = [];
+        });
         if (!state.vocabHintsBySeat || typeof state.vocabHintsBySeat !== "object") {
           state.vocabHintsBySeat = {};
         }
@@ -3366,7 +3438,36 @@
             L.charDictResumeBySeat,
             R.charDictResumeBySeat
           ),
+          treasureBySeat: mergeTreasureBySeat(L.treasureBySeat, R.treasureBySeat),
         };
+      }
+
+      function mergeTreasureBySeat(a, b) {
+        const out = {};
+        const seats = new Set([
+          ...Object.keys(a && typeof a === "object" ? a : {}),
+          ...Object.keys(b && typeof b === "object" ? b : {}),
+        ]);
+        seats.forEach((sid) => {
+          const left = Array.isArray(a && a[sid]) ? a[sid] : [];
+          const right = Array.isArray(b && b[sid]) ? b[sid] : [];
+          const seen = new Set();
+          const merged = [];
+          const primary = left.length >= right.length ? left : right;
+          const secondary = left.length >= right.length ? right : left;
+          primary.forEach((e) => {
+            if (!e || seen.has(e)) return;
+            seen.add(e);
+            merged.push(e);
+          });
+          secondary.forEach((e) => {
+            if (!e || seen.has(e)) return;
+            seen.add(e);
+            merged.push(e);
+          });
+          if (merged.length) out[sid] = merged;
+        });
+        return out;
       }
 
       function mergeVocabResume(a, b) {
@@ -4395,6 +4496,7 @@
         state.vocabHintsBySeat = remapSeatKeyedObject(state.vocabHintsBySeat, idMap);
         state.vocabResumeBySeat = remapSeatKeyedObject(state.vocabResumeBySeat, idMap);
         state.charDictResumeBySeat = remapSeatKeyedObject(state.charDictResumeBySeat, idMap);
+        state.treasureBySeat = remapSeatKeyedObject(state.treasureBySeat, idMap);
         if (state.activeSeatId != null) {
           const mapped = idMap[String(state.activeSeatId)];
           state.activeSeatId = mapped != null ? mapped : null;
@@ -5803,6 +5905,67 @@
         els.writeMsg.className = "write-msg";
       }
 
+      function treasureListForSeat(seatId) {
+        if (seatId == null) return [];
+        if (!state.treasureBySeat || typeof state.treasureBySeat !== "object") {
+          state.treasureBySeat = {};
+        }
+        const k = String(seatId);
+        if (!Array.isArray(state.treasureBySeat[k])) state.treasureBySeat[k] = [];
+        return state.treasureBySeat[k];
+      }
+
+      /** 優先抽寶箱還沒有的圖示；全部集齊後才可能重複 */
+      function pickGiftEmoji(seatId) {
+        const owned = new Set(treasureListForSeat(seatId));
+        const fresh = GIFT_EMOJIS.filter((e) => !owned.has(e));
+        const pool = fresh.length ? fresh : GIFT_EMOJIS;
+        return pool[Math.floor(Math.random() * pool.length)] || "🎁";
+      }
+
+      function addTreasureEmoji(seatId, emoji) {
+        if (seatId == null || !emoji) return;
+        const list = treasureListForSeat(seatId);
+        list.push(emoji);
+        save();
+      }
+
+      function openTreasureChest(seat) {
+        const s = seat || activeSeat();
+        if (!s) {
+          alert("請先選學生座號，才能看寶箱。");
+          openSeatPicker();
+          return;
+        }
+        const list = treasureListForSeat(s.id);
+        if (els.treasureTitle) {
+          els.treasureTitle.textContent = seatLabel(s) + " 的寶箱";
+        }
+        if (els.treasureHint) {
+          els.treasureHint.textContent =
+            "已收集 " +
+            list.length +
+            " 個小圖示（圖示池共 " +
+            GIFT_EMOJIS.length +
+            " 種；抽獎會優先避開已有的）。";
+        }
+        if (els.treasureGrid) {
+          if (!list.length) {
+            els.treasureGrid.innerHTML =
+              "<p class='treasure-empty'>寶箱還是空的。把本課生字泡泡全部消完就會抽到第一個！</p>";
+          } else {
+            els.treasureGrid.innerHTML = list
+              .map((e) => "<div class='item' title='" + escapeHtml(e) + "'>" + e + "</div>")
+              .join("");
+          }
+        }
+        if (els.treasureOverlay) els.treasureOverlay.hidden = false;
+      }
+
+      function closeTreasureChest() {
+        if (els.treasureOverlay) els.treasureOverlay.hidden = true;
+      }
+
       function maybeGift(seat) {
         if (!seat || !state.chars.length) return;
         const done = doneSetFor(seat.id);
@@ -5811,11 +5974,18 @@
         const k = String(seat.id);
         if (state.giftsClaimed[k]) return;
         state.giftsClaimed[k] = true;
+        const emoji = pickGiftEmoji(seat.id);
+        addTreasureEmoji(seat.id, emoji);
         save();
-        const emoji = GIFT_EMOJIS[Math.floor(Math.random() * GIFT_EMOJIS.length)];
-        els.giftEmoji.textContent = emoji;
-        els.giftTitle.textContent = seatLabel(seat) + " 全部消完了！";
-        els.giftText.textContent = "恭喜！可以跟老師領小禮物／抽扭蛋。抽到：" + emoji;
+        if (els.giftEmoji) els.giftEmoji.textContent = emoji;
+        if (els.giftTitle) {
+          els.giftTitle.textContent =
+            seatLabel(seat) + " 全部消完了！恭喜得到 " + emoji;
+        }
+        if (els.giftText) {
+          els.giftText.hidden = true;
+          els.giftText.textContent = "";
+        }
         els.giftOverlay.hidden = false;
         burstConfetti();
       }
@@ -5870,9 +6040,9 @@
         state.reviewChars = reviewChars;
         state.includeReview = true;
         state.chars = chars;
-        // 粉紅聽寫標記跨課保留；只清掉已刪座號的紀錄
+        // 粉紅聽寫標記、寶箱收藏跨課保留；只清掉已刪座號的紀錄
+        const seatIds = new Set(seats.map((s) => String(s.id)));
         if (state.vocabHintsBySeat && typeof state.vocabHintsBySeat === "object") {
-          const seatIds = new Set(seats.map((s) => String(s.id)));
           Object.keys(state.vocabHintsBySeat).forEach((sid) => {
             if (!seatIds.has(String(sid))) {
               delete state.vocabHintsBySeat[sid];
@@ -5881,6 +6051,12 @@
             if (!Array.isArray(state.vocabHintsBySeat[sid])) {
               delete state.vocabHintsBySeat[sid];
             }
+          });
+        }
+        if (state.treasureBySeat && typeof state.treasureBySeat === "object") {
+          Object.keys(state.treasureBySeat).forEach((sid) => {
+            if (!seatIds.has(String(sid))) delete state.treasureBySeat[sid];
+            else if (!Array.isArray(state.treasureBySeat[sid])) state.treasureBySeat[sid] = [];
           });
         }
         state.showOutline = false;
@@ -6102,6 +6278,18 @@
       els.claimGiftBtn.addEventListener("click", () => {
         els.giftOverlay.hidden = true;
       });
+      if (els.giftOpenTreasureBtn) {
+        els.giftOpenTreasureBtn.addEventListener("click", () => {
+          els.giftOverlay.hidden = true;
+          openTreasureChest(activeSeat());
+        });
+      }
+      if (els.treasureBtn) {
+        els.treasureBtn.addEventListener("click", () => openTreasureChest(activeSeat()));
+      }
+      if (els.treasureCloseBtn) {
+        els.treasureCloseBtn.addEventListener("click", closeTreasureChest);
+      }
 
       if (window.matchMedia) {
         const narrowMq = window.matchMedia("(max-width: 480px)");
@@ -6110,7 +6298,7 @@
         else if (narrowMq.addListener) narrowMq.addListener(onNarrowChange);
       }
 
-      [els.setupOverlay, els.seatOverlay, els.writeOverlay, els.giftOverlay, els.vocabExamOverlay, els.addClassOverlay]
+      [els.setupOverlay, els.seatOverlay, els.writeOverlay, els.giftOverlay, els.vocabExamOverlay, els.addClassOverlay, els.treasureOverlay]
         .filter(Boolean)
         .forEach((ov) => {
           ov.addEventListener("click", (e) => {
@@ -6121,6 +6309,7 @@
               else if (ov === els.vocabExamOverlay) closeVocabExam();
               else if (ov === els.addClassOverlay) closeAddClassDialog();
               else if (ov === els.giftOverlay) ov.hidden = true;
+              else if (ov === els.treasureOverlay) closeTreasureChest();
             }
           });
         });
