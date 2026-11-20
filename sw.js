@@ -1,5 +1,5 @@
 /* 生字泡泡：快取主頁與內建筆順包 */
-const CACHE = "wordbubble-v30-auto-next-char";
+const CACHE = "wordbubble-v31-class-progress-guard";
 const PRECACHE = [
   "./index.html",
   "./sw.js",

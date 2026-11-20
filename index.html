@@ -1794,6 +1794,8 @@
 
       let state = defaultState();
       let classesMeta = defaultClassesMeta();
+      /** 目前記憶體中的 state 屬於哪個班級（與 activeClassId 可能短暫不同；save 必須寫回此 id） */
+      let boardOwnerClassId = DEFAULT_CLASS_ID;
       let writingChar = "";
       let writeContext = { type: "bubble" };
       let quiz = null;
@@ -1902,6 +1904,73 @@
       function boardStorageKey(classId) {
         const id = classId || DEFAULT_CLASS_ID;
         return id === DEFAULT_CLASS_ID ? STORAGE_KEY : STORAGE_KEY + "__" + id;
+      }
+
+      /** 進度／寶箱豐富度：用來防止空狀態覆寫已有紀錄的班級 */
+      function boardProgressRichness(s) {
+        if (!s || typeof s !== "object") return 0;
+        let n = 0;
+        const countSeatCharBag = (bag) => {
+          if (!bag || typeof bag !== "object") return;
+          Object.keys(bag).forEach((sid) => {
+            const map = bag[sid];
+            if (Array.isArray(map)) {
+              n += map.length;
+              return;
+            }
+            if (!map || typeof map !== "object") return;
+            Object.keys(map).forEach((ch) => {
+              const rec = map[ch];
+              if (!rec) return;
+              if (typeof rec === "object" && (rec.freehand > 0 || rec.outline)) n += 1;
+              else if (typeof rec === "object" && ("freehand" in rec || "outline" in rec)) {
+                /* 未練過的紀錄不計 */
+              } else n += 1;
+            });
+          });
+        };
+        if (s.progressByLesson && typeof s.progressByLesson === "object") {
+          Object.keys(s.progressByLesson).forEach((lid) => countSeatCharBag(s.progressByLesson[lid]));
+        }
+        countSeatCharBag(s.progress);
+        if (s.giftsClaimedByLesson && typeof s.giftsClaimedByLesson === "object") {
+          Object.keys(s.giftsClaimedByLesson).forEach((lid) => {
+            const bag = s.giftsClaimedByLesson[lid];
+            if (!bag || typeof bag !== "object") return;
+            Object.keys(bag).forEach((sid) => {
+              if (bag[sid]) n += 1;
+            });
+          });
+        }
+        if (s.giftsClaimed && typeof s.giftsClaimed === "object") {
+          Object.keys(s.giftsClaimed).forEach((sid) => {
+            if (s.giftsClaimed[sid]) n += 1;
+          });
+        }
+        if (s.treasureBySeat && typeof s.treasureBySeat === "object") {
+          Object.keys(s.treasureBySeat).forEach((sid) => {
+            if (Array.isArray(s.treasureBySeat[sid])) n += s.treasureBySeat[sid].length * 5;
+          });
+        }
+        if (s.vocabHintsBySeat && typeof s.vocabHintsBySeat === "object") {
+          Object.keys(s.vocabHintsBySeat).forEach((sid) => {
+            if (Array.isArray(s.vocabHintsBySeat[sid])) n += s.vocabHintsBySeat[sid].length;
+          });
+        }
+        return n;
+      }
+
+      function lessonBagHasCharProgress(bag) {
+        if (!bag || typeof bag !== "object") return false;
+        return Object.keys(bag).some((sid) => {
+          const map = bag[sid];
+          if (Array.isArray(map)) return map.length > 0;
+          if (!map || typeof map !== "object") return false;
+          return Object.keys(map).some((ch) => {
+            const rec = map[ch];
+            return !!(rec && typeof rec === "object" && (rec.freehand > 0 || rec.outline));
+          });
+        });
       }
 
       function extractSheetIdFromUrl(url) {
@@ -2028,6 +2097,7 @@
 
       function load(classId) {
         const id = classId || (classesMeta && classesMeta.activeClassId) || DEFAULT_CLASS_ID;
+        boardOwnerClassId = id;
         try {
           let raw = localStorage.getItem(boardStorageKey(id));
           if (!raw && id === DEFAULT_CLASS_ID) {
@@ -2044,6 +2114,7 @@
           }
           normalizeLoadedState(data);
         } catch (_) {
+          // 解析失敗時不要把空狀態存回去，以免蓋掉原班級資料
           state = defaultState();
         }
       }
@@ -2685,11 +2756,61 @@
         return s.size;
       }
 
-      function save() {
+      /**
+       * 把目前 state 寫入指定班級。
+       * 預設寫入 boardOwnerClassId（擁有目前記憶體進度的班級），避免切班瞬間寫錯桶。
+       * opts.force：允許空狀態覆寫（僅用於「新建班級」）。
+       * 若記憶體進度為空、磁碟上該班卻有綠泡／寶箱，會自動把進度欄位併回再存，避免切班蓋掉。
+       */
+      function save(opts) {
+        const force = !!(opts && opts.force);
+        const id =
+          (opts && opts.classId) ||
+          boardOwnerClassId ||
+          (classesMeta && classesMeta.activeClassId) ||
+          DEFAULT_CLASS_ID;
         try {
-          const id = (classesMeta && classesMeta.activeClassId) || DEFAULT_CLASS_ID;
-          localStorage.setItem(boardStorageKey(id), JSON.stringify(state));
-        } catch (_) {}
+          const key = boardStorageKey(id);
+          if (!force) {
+            const prevRaw = localStorage.getItem(key);
+            if (prevRaw) {
+              try {
+                const prev = JSON.parse(prevRaw);
+                const nextRich = boardProgressRichness(state);
+                const prevRich = boardProgressRichness(prev);
+                if (nextRich === 0 && prevRich > 0) {
+                  state.progressByLesson =
+                    prev.progressByLesson && typeof prev.progressByLesson === "object"
+                      ? prev.progressByLesson
+                      : state.progressByLesson || {};
+                  state.giftsClaimedByLesson =
+                    prev.giftsClaimedByLesson && typeof prev.giftsClaimedByLesson === "object"
+                      ? prev.giftsClaimedByLesson
+                      : state.giftsClaimedByLesson || {};
+                  state.treasureBySeat =
+                    prev.treasureBySeat && typeof prev.treasureBySeat === "object"
+                      ? prev.treasureBySeat
+                      : state.treasureBySeat || {};
+                  state.vocabHintsBySeat =
+                    prev.vocabHintsBySeat && typeof prev.vocabHintsBySeat === "object"
+                      ? prev.vocabHintsBySeat
+                      : state.vocabHintsBySeat || {};
+                  if (prev.vocabResumeBySeat && typeof prev.vocabResumeBySeat === "object") {
+                    state.vocabResumeBySeat = prev.vocabResumeBySeat;
+                  }
+                  if (prev.charDictResumeBySeat && typeof prev.charDictResumeBySeat === "object") {
+                    state.charDictResumeBySeat = prev.charDictResumeBySeat;
+                  }
+                }
+              } catch (_) {}
+            }
+          }
+          localStorage.setItem(key, JSON.stringify(state));
+          boardOwnerClassId = id;
+          return true;
+        } catch (_) {
+          return false;
+        }
       }
 
       function renderClassSwitch() {
@@ -2792,7 +2913,9 @@
       async function switchClass(classId) {
         if (!classId || classId === classesMeta.activeClassId) return;
         if (classId === BOOK2_CLASS_ID && !ensureBook2Access()) return;
-        save();
+        const prevId = boardOwnerClassId || classesMeta.activeClassId || DEFAULT_CLASS_ID;
+        // 先把「目前這包 state」寫回原班級（若記憶體空、磁碟有進度會自動併回），再換記憶體
+        save({ classId: prevId });
         classesMeta.activeClassId = classId;
         saveClassesMeta();
         load(classId);
@@ -2861,12 +2984,13 @@
           lessonUrl: lessonUrl,
           examUrl: examUrl,
         };
-        save();
+        save({ classId: boardOwnerClassId || classesMeta.activeClassId, force: true });
         classesMeta.classes.push(entry);
         classesMeta.activeClassId = id;
         saveClassesMeta();
         state = defaultState();
-        save();
+        boardOwnerClassId = id;
+        save({ classId: id, force: true });
         lessonCatalog = [];
         examCatalog = [];
         closeAddClassDialog();
@@ -4454,13 +4578,17 @@
           state.giftsClaimedByLesson = {};
         }
         const lid = currentProgressLessonKey();
-        const hasAnyLessonProg = Object.keys(state.progressByLesson).some((k) => {
-          const bag = state.progressByLesson[k];
-          return bag && typeof bag === "object" && Object.keys(bag).length > 0;
-        });
+        // 必須看「是否真有練過的字」，不能只看座號空殼（ensureSeatProgressKeys 會造空物件）
+        const hasAnyLessonProg = Object.keys(state.progressByLesson).some((k) =>
+          lessonBagHasCharProgress(state.progressByLesson[k])
+        );
         const hasAnyLessonGift = Object.keys(state.giftsClaimedByLesson).some((k) => {
           const bag = state.giftsClaimedByLesson[k];
-          return bag && typeof bag === "object" && Object.keys(bag).length > 0;
+          return (
+            bag &&
+            typeof bag === "object" &&
+            Object.keys(bag).some((sid) => !!bag[sid])
+          );
         });
         if (!hasAnyLessonProg && state.progress && typeof state.progress === "object" && lid) {
           const bag = {};
@@ -6484,9 +6612,13 @@
         state.includeReview = true;
         state.showOutline = false;
         state.showMoe = true;
+        boardOwnerClassId = classesMeta.activeClassId || DEFAULT_CLASS_ID;
       } else {
         load(classesMeta.activeClassId);
-        save();
+        // 遷移後如有進度／寶箱才回寫；禁止把空狀態存回去蓋掉原資料
+        if (boardProgressRichness(state) > 0 || (state.seats && state.seats.length)) {
+          save();
+        }
       }
       ensureSeatProgressKeys();
       renderClassSwitch();
